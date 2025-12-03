@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Coffee, Star, MapPin } from "lucide-react";
-import { incrementVisitCountServer } from "./actions";
+import { incrementVisitCountServer } from "../actions";
 
 export default function Home() {
   // Track visits (simple session based)

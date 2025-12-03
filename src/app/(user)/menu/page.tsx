@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useMenu } from '../../context/MenuContext';
-import { CATEGORIES } from '../../types';
-import { formatToman } from '../../utils/format';
+import { useMenu } from '@/context/MenuContext';
+import { CATEGORIES } from '@/types';
+import { formatToman } from '@/utils/format';
 import { ShoppingBag, Loader2 } from 'lucide-react';
 
 export default function MenuPage() {

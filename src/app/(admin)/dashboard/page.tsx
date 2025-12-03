@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMenu } from '../../context/MenuContext';
-import { MenuItem, CATEGORIES, Order } from '../../types';
+import { useMenu } from '@/context/MenuContext';
+import { MenuItem, CATEGORIES, Order } from '@/types';
 import { Trash2, Plus, Edit2, QrCode, LogOut, Save, Link as LinkIcon, Upload, CheckCircle, Clock, XCircle, LayoutDashboard, Coffee, DollarSign, TrendingUp, Users } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { formatToman, toPersianDigits } from '../../utils/format';
-import { getStats } from '../../services/dbService';
+import { formatToman, toPersianDigits } from '@/utils/format';
+import { getStats } from '@/services/dbService';
 
 export default function AdminPage() {
   const { items, orders, addItem, updateItem, deleteItem, updateOrderStatus, isAuthenticated, logout, qrCodeUrl, updateQrCodeUrl } = useMenu();

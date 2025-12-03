@@ -3,8 +3,8 @@
 import React from 'react';
 import { Instagram, MapPin, Clock } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { useMenu } from '../context/MenuContext';
-import { LOGO_URL } from '../constants';
+import { useMenu } from '@/context/MenuContext';
+import { LOGO_URL } from '@/constants';
 
 const Footer: React.FC = () => {
   const { qrCodeUrl } = useMenu();

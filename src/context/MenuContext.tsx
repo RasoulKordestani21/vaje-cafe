@@ -1,8 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { MenuItem, MenuContextType, Order, OrderItem } from '../types';
-import { DEFAULT_MENU } from '../constants';
+import { MenuItem, MenuContextType, Order, OrderItem } from '@/types';
+import { DEFAULT_MENU } from '@/constants';
 import { 
   subscribeToMenu, 
   subscribeToOrders, 
@@ -11,7 +11,7 @@ import {
   deleteMenuItemFromDB,
   createOrderInDB,
   updateOrderStatusInDB
-} from '../services/dbService';
+} from '@/services/dbService';
 
 const MenuContext = createContext<MenuContextType | undefined>(undefined);
 
@@ -89,7 +89,11 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
   const login = (password: string) => {
     if (password === 'admin123') {
       setIsAuthenticated(true);
-      if (typeof window !== 'undefined') localStorage.setItem('vaje_auth', 'true');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vaje_auth', 'true');
+        // Also set cookie for middleware access
+        document.cookie = 'vaje_auth=true; path=/; max-age=86400'; // 24 hours
+      }
       return true;
     }
     return false;
@@ -97,7 +101,11 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = () => {
     setIsAuthenticated(false);
-    if (typeof window !== 'undefined') localStorage.removeItem('vaje_auth');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('vaje_auth');
+      // Remove cookie
+      document.cookie = 'vaje_auth=; path=/; max-age=0';
+    }
   };
 
   const updateQrCodeUrl = (url: string) => {

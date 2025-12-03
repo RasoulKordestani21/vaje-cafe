@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, User } from 'lucide-react';
-import { LOGO_URL } from '../constants';
+import { useMenu } from '@/context/MenuContext';
+import { Menu, X, User, LogOut } from 'lucide-react';
+import { LOGO_URL } from '@/constants';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const { isAuthenticated, logout } = useMenu();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,13 +26,20 @@ const Navbar: React.FC = () => {
     setIsOpen(false);
   }, [pathname]);
 
+  const isAdminRoute = pathname?.startsWith('/dashboard') || pathname?.startsWith('/login');
+  const isUserRoute = pathname?.startsWith('/menu') || pathname === '/' || pathname?.startsWith('/(user)');
+
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'bg-neutral-900/90 backdrop-blur-md shadow-lg border-b border-white/5' : 'bg-transparent'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-24">
           
           {/* Logo Section - COFE VAJE */}
-          <Link href="/" className="flex-shrink-0 flex items-center gap-3 group">
+          <Link href={isAdminRoute ? '/login' : '/'} className="flex-shrink-0 flex items-center gap-3 group">
              <img 
                src={LOGO_URL} 
                alt="Vaje Cafe Logo" 
@@ -47,11 +56,30 @@ const Navbar: React.FC = () => {
           {/* Desktop Menu */}
           <div className="hidden md:block">
             <div className="mr-10 flex items-baseline space-x-8 space-x-reverse">
-              <NavLink href="/" active={pathname === '/'}>خانه</NavLink>
-              <NavLink href="/menu" active={pathname === '/menu'}>منو</NavLink>
-              <NavLink href="/admin" active={pathname?.startsWith('/admin')}>
-                <span className="flex items-center gap-1"><User size={16} className="ml-1"/> مدیریت</span>
-              </NavLink>
+              {!isAdminRoute && (
+                <>
+                  <NavLink href="/" active={pathname === '/'}>خانه</NavLink>
+                  <NavLink href="/menu" active={pathname === '/menu'}>منو</NavLink>
+                </>
+              )}
+              
+              {isAuthenticated ? (
+                <>
+                  <NavLink href="/dashboard" active={pathname === '/dashboard'}>
+                    <span className="flex items-center gap-1"><User size={16} className="ml-1"/> داشبورد</span>
+                  </NavLink>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-1 text-coffee-100 hover:text-coffee-300 transition-colors font-medium"
+                  >
+                    <LogOut size={16} className="ml-1"/> خروج
+                  </button>
+                </>
+              ) : !isAdminRoute && (
+                <NavLink href="/login" active={pathname === '/login'}>
+                  <span className="flex items-center gap-1"><User size={16} className="ml-1"/> مدیریت</span>
+                </NavLink>
+              )}
             </div>
           </div>
 
@@ -71,9 +99,25 @@ const Navbar: React.FC = () => {
       {isOpen && (
         <div className="md:hidden bg-neutral-900 border-b border-coffee-800">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 text-right">
-            <MobileNavLink href="/">خانه</MobileNavLink>
-            <MobileNavLink href="/menu">منو کافه</MobileNavLink>
-            <MobileNavLink href="/admin">پنل مدیریت</MobileNavLink>
+            {!isAdminRoute && (
+              <>
+                <MobileNavLink href="/">خانه</MobileNavLink>
+                <MobileNavLink href="/menu">منو کافه</MobileNavLink>
+              </>
+            )}
+            {isAuthenticated ? (
+              <>
+                <MobileNavLink href="/dashboard">داشبورد</MobileNavLink>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-right px-3 py-2 rounded-md text-coffee-100 hover:text-coffee-300 transition-colors"
+                >
+                  خروج
+                </button>
+              </>
+            ) : !isAdminRoute && (
+              <MobileNavLink href="/login">پنل مدیریت</MobileNavLink>
+            )}
           </div>
         </div>
       )}
