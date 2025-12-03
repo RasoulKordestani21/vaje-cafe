@@ -1,0 +1,1 @@
+// File removed during migration to Next.js
