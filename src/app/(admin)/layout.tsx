@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useMenu } from '@/context/MenuContext';
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMenu } from "@/context/MenuContext";
 
 export default function AdminLayout({
-  children,
+  children
 }: {
   children: React.ReactNode;
 }) {
@@ -16,7 +16,7 @@ export default function AdminLayout({
   useEffect(() => {
     // Check authentication status
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push("/login");
     }
     setIsLoading(false);
   }, [isAuthenticated, router]);
