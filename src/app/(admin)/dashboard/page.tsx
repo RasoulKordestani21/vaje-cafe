@@ -1,30 +1,80 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useMenu } from "@/context/MenuContext";
-import { MenuItem, CATEGORIES, Order } from "@/types";
+import { useContext } from "react";
+import { ThemeContext } from "@/app/providers";
 import {
   Trash2,
   Plus,
-  Edit2,
-  QrCode,
-  LogOut,
-  Save,
-  Link as LinkIcon,
-  Upload,
-  CheckCircle,
-  Clock,
-  XCircle,
   LayoutDashboard,
   Coffee,
+  Users,
+  Clock,
+  History,
+  Building2,
+  CheckSquare,
+  Square,
+  Settings,
+  Image,
   DollarSign,
-  TrendingUp,
-  Users
+  Star,
+  MessageSquareText,
+  Images,
+  FileText
 } from "lucide-react";
-import { QRCodeCanvas } from "qrcode.react";
+import DashboardStats from "@/components/dashboard/DashboardStats";
+import ManualOrderForm from "@/components/ManualOrderForm";
+import OrdersTable from "@/components/OrdersTable";
+import { RawMaterialModal } from "@/components/RawMaterialModal";
+import { IngredientModal } from "@/components/IngredientModal";
+import { InventoryLogsModal } from "@/components/InventoryLogsModal";
+import OrderDetailModal from "@/components/OrderDetailModal";
+import StockAdjustmentModal from "@/components/StockAdjustmentModal";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { getStats } from "@/services/dbService";
+import {
+  formatPersianNumber
+} from "@/utils/dateFormatter";
+import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
+import {
+  filterOrders,
+  sortOrders,
+  getPaginationInfo
+} from "@/utils/pagination";
+import OrderFilters, {
+  OrderFilterState
+} from "@/components/orders/OrderFilters";
+import OrderBulkActions from "@/components/orders/OrderBulkActions";
+import InventoryOverview from "@/components/inventory/InventoryOverview";
+import LowStockAlerts from "@/components/inventory/LowStockAlerts";
+import RestockRecommendations from "@/components/inventory/RestockRecommendations";
+import SuppliersList from "@/components/inventory/SuppliersList";
+import { useInventory } from "@/hooks/useInventory";
+import MenuItemForm from "@/components/menu/MenuItemForm";
+import MenuTable from "@/components/menu/MenuTable";
+import { useMenuItems } from "@/hooks/useMenuItems";
+import CustomerOrders from "@/components/customers/CustomerOrders";
+import BranchesManagement from "@/components/branches/BranchesManagement";
+import CustomersManagement from "@/components/customers/CustomersManagement";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import SiteSettings from "@/components/settings/SiteSettings";
+import BannerManager from "@/components/banners/BannerManager";
+import WorkingHoursManager from "@/components/working-hours/WorkingHoursManager";
+import ExpenseManager from "@/components/expenses/ExpenseManager";
+import RatingsApproval from "@/components/ratings/RatingsApproval";
+import CustomerMessagesManager from "@/components/admin/CustomerMessagesManager";
+import StaffManagement from "@/components/staff/StaffManagement";
+import GalleryManager from "@/components/gallery/GalleryManager";
+import StoryManager from "@/components/stories/StoryManager";
+import ExperienceCommentsManager from "@/components/experience/ExperienceCommentsManager";
+import LoyaltyProgramManager from "@/components/loyalty/LoyaltyProgramManager";
+import LoyaltyPointsManager from "@/components/loyalty/LoyaltyPointsManager";
+import ReportsManager from "@/components/reports/ReportsManager";
+import WasteManager from "@/components/waste/WasteManager";
+import DashboardSidebar, { DashboardPage } from "@/components/dashboard/DashboardSidebar";
+import { cn } from "@/lib/utils";
 
 export default function AdminPage() {
   const {
@@ -35,652 +85,1495 @@ export default function AdminPage() {
     deleteItem,
     updateOrderStatus,
     isAuthenticated,
+    userRole,
     logout,
-    qrCodeUrl,
-    updateQrCodeUrl
+    isLoading
   } = useMenu();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "menu" | "orders">(
-    "dashboard"
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const { isDark, toggleTheme } = useContext(ThemeContext);
+  
+  // Get active page from URL search params, default to "dashboard"
+  // Use pathname + search params to ensure component updates on navigation
+  const pageParam = searchParams?.get("page") || "dashboard";
+  const [activePage, setActivePage] = useState<DashboardPage>(
+    (pageParam as DashboardPage) || "dashboard"
   );
+  
+  // Sync activePage with URL params when they change
+  useEffect(() => {
+    const newPageParam = searchParams?.get("page") || "dashboard";
+    const newActivePage = (newPageParam as DashboardPage) || "dashboard";
+    setActivePage(newActivePage);
+  }, [pageParam, pathname, searchParams]);
+  
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [accessibleTabs, setAccessibleTabs] = useState<string[]>([]);
+  const [userType, setUserType] = useState<"admin" | "staff" | null>(null);
   const [stats, setStats] = useState({
     visits: 0,
+    menuViews: 0,
     totalSales: 0,
-    ordersCount: 0
+    ordersCount: 0,
+    averageOrderValue: 0,
+    dailyData: [] as Array<{
+      date: string;
+      orders: number;
+      sales: number;
+      visits?: number;
+    }>,
+    categoryBreakdown: [] as Array<{
+      name: string;
+      value: number;
+      sales?: number;
+      itemCount?: number;
+    }>,
+    comparisonData: {
+      todayVsYesterday: {
+        orders: 0,
+        sales: 0,
+        ordersChange: 0,
+        salesChange: 0
+      },
+      thisWeekVsLastWeek: {
+        orders: 0,
+        sales: 0,
+        ordersChange: 0,
+        salesChange: 0
+      }
+    },
+    topSellingItems: [] as Array<{
+      id: string;
+      name: string;
+      quantity: number;
+      revenue: number;
+    }>
+  });
+  // Pagination & Filter State
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPerPage] = useState(10);
+  const [showManualOrderForm, setShowManualOrderForm] = useState(false);
+  const [orderFilter, setOrderFilter] = useState<OrderFilterState>({
+    source: "all",
+    status: "all",
+    dateFrom: "",
+    dateTo: "",
+    search: "",
+    minAmount: "",
+    maxAmount: ""
+  });
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [showOrderDetail, setShowOrderDetail] = useState(false);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(null);
+
+  // Customer Orders State
+  // Customer Orders state is now handled by CustomerOrders component
+
+  // Inventory State
+  const [products, setProducts] = useState<any[]>([]);
+  const [inventoryTypeFilter, setInventoryTypeFilter] = useState<
+    "all" | "raw_material" | "packed_product"
+  >("all");
+  const [showNewProductForm, setShowNewProductForm] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [selectedProductLogs, setSelectedProductLogs] = useState<any[]>([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  
+  // Inventory Enhancement State
+  const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
+  
+  // Use inventory hook (only when inventory tab is active and user is super_admin)
+  // Note: Hook will be called but will only fetch when tab is active
+  const inventoryData = useInventory();
+  const {
+    lowStockAlerts,
+    inventoryValue,
+    restockRecommendations,
+    suppliers
+  } = activePage === "inventory" && userRole === "super_admin" ? inventoryData : {
+    lowStockAlerts: [],
+    inventoryValue: null,
+    restockRecommendations: [],
+    suppliers: []
+  };
+  const [showStockAdjustment, setShowStockAdjustment] = useState(false);
+  const [adjustmentProduct, setAdjustmentProduct] = useState<any | null>(null);
+
+  // Date range filter for stats
+  const [dateRange, setDateRange] = useState({
+    from: "",
+    to: ""
   });
 
-  // Menu Editing State
-  const [isEditing, setIsEditing] = useState<string | null>(null);
-  const [showQR, setShowQR] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  // Branch selection state
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState<Omit<MenuItem, "id">>({
-    name: "",
-    description: "",
-    price: 0,
-    category: "اسپرسو",
-    available: true,
-    imageUrl: ""
+  // Menu Management
+  const [showIngredientModal, setShowIngredientModal] = useState(false);
+  const [ingredientModalItemId, setIngredientModalItemId] = useState<string>("");
+  
+  const menuItems = useMenuItems({
+    items,
+    addItem,
+    updateItem,
+    deleteItem
   });
-
-  const [localQrUrl, setLocalQrUrl] = useState(qrCodeUrl);
 
   useEffect(() => {
+    // Don't redirect while loading
+    if (isLoading) return;
+    console.log(isAuthenticated);
     if (!isAuthenticated) {
       router.push("/login");
     } else {
       // Fetch stats when authenticated
-      getStats().then(data => setStats(data as any));
-    }
-  }, [isAuthenticated, router, activeTab]);
+      const fetchStats = async () => {
+        // Convert Jalali dates to timestamps for the API
+        let startDate: number | undefined = undefined;
+        let endDate: number | undefined = undefined;
 
-  useEffect(() => {
-    setLocalQrUrl(qrCodeUrl);
-  }, [qrCodeUrl]);
+        if (dateRange.from) {
+          startDate = jalaliToTimestamp(dateRange.from);
+        }
+        if (dateRange.to) {
+          // Set end time to end of day
+          endDate = jalaliToTimestamp(dateRange.to);
+          endDate = endDate + 24 * 60 * 60 - 1;
+        }
 
-  const handleLogout = () => {
-    logout();
-    router.push("/");
-  };
+        const params = new URLSearchParams();
+        if (startDate) params.append("startDate", startDate.toString());
+        if (endDate) params.append("endDate", endDate.toString());
 
-  const handleQrSave = () => {
-    updateQrCodeUrl(localQrUrl);
-    alert("لینک QR Code فوتر با موفقیت بروزرسانی شد.");
-  };
+        // Fetch enhanced analytics
+        const analyticsUrl = params.toString()
+          ? `/api/analytics?${params.toString()}`
+          : "/api/analytics";
+        
+        try {
+          const analyticsResponse = await fetch(analyticsUrl);
+          const analyticsData = await analyticsResponse.json();
+          
+          setStats({
+            visits: analyticsData.visits || 0,
+            menuViews: analyticsData.menuViews || 0,
+            totalSales: analyticsData.totalSales || 0,
+            ordersCount: analyticsData.ordersCount || 0,
+            averageOrderValue: analyticsData.averageOrderValue || 0,
+            dailyData: analyticsData.dailyData || [],
+            categoryBreakdown: analyticsData.categoryBreakdown || [],
+            comparisonData: analyticsData.comparisonData || {
+              todayVsYesterday: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 },
+              thisWeekVsLastWeek: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 }
+            },
+            topSellingItems: analyticsData.topSellingItems || []
+          });
+        } catch (error) {
+          console.error("Error fetching analytics:", error);
+          // Fallback to basic stats
+          const statsUrl = params.toString()
+            ? `/api/stats?${params.toString()}`
+            : "/api/stats";
+          const response = await fetch(statsUrl);
+          const data = await response.json();
+          setStats({
+            visits: data.visits || 0,
+            menuViews: data.menuViews || 0,
+            totalSales: data.totalSales || 0,
+            ordersCount: data.orders || 0,
+            averageOrderValue: 0,
+            dailyData: data.dailyData || [],
+            categoryBreakdown: data.categoryBreakdown || [],
+            comparisonData: {
+              todayVsYesterday: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 },
+              thisWeekVsLastWeek: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 }
+            },
+            topSellingItems: []
+          });
+        }
+      };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0]);
-    }
-  };
+      fetchStats();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      if (isEditing) {
-        await updateItem(isEditing, formData, imageFile || undefined);
-        setIsEditing(null);
-      } else {
-        await addItem(formData, imageFile || undefined);
+      // Auto-refresh stats every 10 seconds when on dashboard tab (reduced from 30s)
+      if (activePage === "dashboard") {
+        const interval = setInterval(fetchStats, 10000);
+        return () => clearInterval(interval);
       }
-      // Reset form
-      setFormData({
-        name: "",
-        description: "",
-        price: 0,
-        category: "اسپرسو",
-        available: true,
-        imageUrl: ""
+    }
+  }, [isLoading, isAuthenticated, router, activePage, dateRange]);
+
+  // Customer orders data is now handled by CustomerOrders component
+
+  // Refs to prevent multiple simultaneous fetches and track last fetch
+  const fetchingProductsRef = useRef(false);
+  const lastFetchedFilterRef = useRef<string>("");
+
+  // Fetch products when inventory tab is active
+  useEffect(() => {
+    // Only fetch if inventory tab is active and user is super admin
+    if (activePage !== "inventory" || userRole !== "super_admin") {
+      return;
+    }
+
+    // Create a unique key for this fetch (tab + filter)
+    const fetchKey = `${activePage}-${inventoryTypeFilter}`;
+
+    // Skip if we're already fetching or if we just fetched this exact combination
+    if (
+      fetchingProductsRef.current ||
+      lastFetchedFilterRef.current === fetchKey
+    ) {
+      return;
+    }
+
+    fetchingProductsRef.current = true;
+    lastFetchedFilterRef.current = fetchKey;
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      try {
+        const url =
+          inventoryTypeFilter === "all"
+            ? "/api/products"
+            : `/api/products?type=${inventoryTypeFilter}`;
+        const res = await fetch(url);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          // API returns array directly, not wrapped in { data: [...] }
+          setProducts(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+        // Reset the last fetched ref on error so we can retry
+        if (lastFetchedFilterRef.current === fetchKey) {
+          lastFetchedFilterRef.current = "";
+        }
+      } finally {
+        fetchingProductsRef.current = false;
+      }
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+      // Don't reset fetchingProductsRef here - let it complete naturally
+    };
+  }, [activePage, userRole, inventoryTypeFilter]);
+
+  // Inventory data is now handled by useInventory hook
+
+  const handleAddProduct = async (product: any) => {
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+        },
+        body: JSON.stringify(product)
       });
-      setImageFile(null);
+
+      if (res.ok) {
+        setShowNewProductForm(false);
+        alert("محصول با موفقیت اضافه شد");
+        // Don't refresh here - let the modal's onSave handle it
+      } else {
+        const error = await res.json().catch(() => ({}));
+        alert(`خطا در اضافه کردن محصول: ${error.error || "Unknown error"}`);
+      }
     } catch (error) {
-      alert("خطا در ذخیره سازی");
-      console.error(error);
+      console.error("Error adding product:", error);
+      alert("خطا در اضافه کردن محصول");
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm("آیا مطمئن هستید؟")) return;
+
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "DELETE",
+        headers: {
+          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+        }
+      });
+
+      if (res.ok) {
+        setProducts(products.filter(p => p.id !== id));
+        setSelectedProduct(null);
+        alert("محصول حذف شد");
+      }
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      alert("خطا در حذف محصول");
+    }
+  };
+
+  const handleSaveProduct = async (updatedProduct: any) => {
+    try {
+      const res = await fetch(`/api/products/${updatedProduct.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+        },
+        body: JSON.stringify(updatedProduct)
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setSelectedProduct(updated);
+        // Refresh products list after a short delay (only if not already fetching)
+        setTimeout(() => {
+          if (
+            activePage === "inventory" &&
+            userRole === "super_admin" &&
+            !fetchingProductsRef.current
+          ) {
+            fetchingProductsRef.current = true;
+            const url =
+              inventoryTypeFilter === "all"
+                ? "/api/products"
+                : `/api/products?type=${inventoryTypeFilter}`;
+            fetch(url)
+              .then(res => res.json())
+              .then(data => {
+                setProducts(Array.isArray(data) ? data : []);
+                fetchingProductsRef.current = false;
+              })
+              .catch(err => {
+                console.error("Failed to refresh products:", err);
+                fetchingProductsRef.current = false;
+              });
+          }
+        }, 200);
+        return;
+      } else {
+        alert("خطا در ذخیره‌سازی");
+      }
+    } catch (error) {
+      console.error("Error saving product:", error);
+      alert("خطا در ذخیره‌سازی");
+    }
+  };
+
+  const handleViewLogs = async (productId: string) => {
+    try {
+      const res = await fetch(`/api/products/${productId}/logs`);
+      if (res.ok) {
+        const logs = await res.json();
+        setSelectedProductLogs(logs);
+        setShowLogsModal(true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch logs:", error);
+      alert("خطا در دریافت لاگ‌ها");
+    }
+  };
+
+  const handleStockAdjustment = async (productId: string, newStock: number, note: string) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+        },
+        body: JSON.stringify({
+          currentStock: newStock
+        })
+      });
+
+      if (res.ok) {
+        alert("موجودی با موفقیت بروزرسانی شد");
+        // Refresh products
+        const url =
+          inventoryTypeFilter === "all"
+            ? "/api/products"
+            : `/api/products?type=${inventoryTypeFilter}`;
+        const productsRes = await fetch(url);
+        if (productsRes.ok) {
+          const data = await productsRes.json();
+          setProducts(Array.isArray(data) ? data : []);
+        }
+        // Refresh inventory data
+        if (activePage === "inventory" && userRole === "super_admin") {
+          inventoryData.refresh();
+        }
+      } else {
+        alert("خطا در بروزرسانی موجودی");
+      }
+    } catch (error) {
+      console.error("Error adjusting stock:", error);
+      alert("خطا در بروزرسانی موجودی");
+    }
+  };
+
+  const handleOrderStatusChange = async (
+    orderId: string,
+    newStatus: "pending" | "completed" | "cancelled"
+  ) => {
+    try {
+      // Update order status
+      await updateOrderStatus(orderId, newStatus);
+
+      // If order is completed, record it in stats
+      if (newStatus === "completed") {
+        const order = orders.find(o => o.id === orderId);
+        if (order) {
+          // Record the order event in stats
+          try {
+            await fetch("/api/stats", {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+              },
+              body: JSON.stringify({
+                action: "order",
+                data: {
+                  orderId,
+                  amount: order.totalAmount || order.totalPrice || 0,
+                  source: order.source
+                }
+              })
+            });
+          } catch (error) {
+            console.warn("Failed to record order stats:", error);
+          }
+        }
+      }
+
+      // Refresh stats
+      const updatedStats = await getStats();
+      setStats(updatedStats as any);
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      alert("خطا در بروزرسانی وضعیت سفارش");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Call logout API to clear session on server
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (err) {
+      console.error("Logout API error:", err);
     } finally {
-      setIsSubmitting(false);
+      // Clear sessionStorage (session-based auth)
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("vaje_auth");
+      }
+      // Clear client-side auth
+      logout();
+      router.push("/login");
     }
   };
 
-  const handleEdit = (item: MenuItem) => {
-    setIsEditing(item.id);
-    setFormData({
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      category: item.category,
-      available: item.available,
-      imageUrl: item.imageUrl
-    });
-    setImageFile(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Menu handlers are now in useMenuItems hook
+
+  // Define role-based accessible tabs (business logic)
+  const getRoleBasedTabs = (): string[] => {
+    // Get role from context or fallback to sessionStorage
+    let effectiveRole = userRole;
+    if (!effectiveRole && typeof window !== "undefined") {
+      const roleFromStorage = sessionStorage.getItem("vaje_role");
+      if (roleFromStorage === "admin" || roleFromStorage === "super_admin") {
+        effectiveRole = roleFromStorage as "admin" | "super_admin";
+      }
+    }
+
+    if (effectiveRole === "super_admin") {
+      // Super Admin: Full access to everything
+      return ["dashboard", "menu", "orders", "inventory", "customer-orders", "branches", "customers", "settings", "banners", "working-hours", "expenses", "ratings", "customer-messages", "staff", "stats", "reports", "waste", "gallery", "stories", "experience-comments", "loyalty"];
+    }
+    
+    if (effectiveRole === "admin") {
+      // Admin: Management tabs (no inventory, branches, staff management)
+      return ["dashboard", "menu", "orders", "customer-orders", "expenses", "ratings", "customer-messages", "reports", "waste", "gallery", "stories", "experience-comments", "loyalty"];
+    }
+    
+    if (userType === "staff") {
+      // Staff tabs are fetched from database (can be customized per staff member)
+      return accessibleTabs;
+    }
+    
+    // Default fallback: if authenticated but role not loaded yet, show basic tabs
+    if (isAuthenticated) {
+      return ["dashboard", "menu", "orders"];
+    }
+    
+    return [];
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("آیا از حذف این آیتم اطمینان دارید؟")) {
-      await deleteItem(id);
+  // Fetch staff accessible tabs and set default tab
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const userTypeValue = sessionStorage.getItem("vaje_userType");
+      setUserType(userTypeValue as "admin" | "staff" | null);
+      
+      if (userTypeValue === "staff") {
+        const staffData = sessionStorage.getItem("staff_data");
+        if (staffData) {
+          const parsed = JSON.parse(staffData);
+          
+          // Role-based default tabs (business logic)
+          const roleDefaults: { [key: string]: string[] } = {
+            waiter: ["orders"],
+            barista: ["orders"],
+            manager: ["dashboard", "orders", "stats"],
+          };
+          
+          // Fetch accessible tabs from database
+          fetch(`/api/staff/${parsed.id}/tabs`, {
+            credentials: "include",
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.permissions && Array.isArray(data.permissions) && data.permissions.length > 0) {
+                setAccessibleTabs(data.permissions);
+              } else {
+                // Use role-based defaults
+                setAccessibleTabs(roleDefaults[parsed.role] || ["orders"]);
+              }
+              // Set default active tab for staff
+              const defaultTab = roleDefaults[parsed.role]?.[0] || "orders";
+              if (defaultTab === "dashboard") {
+                router.push("/dashboard");
+              } else {
+                router.push(`/dashboard?page=${defaultTab}`);
+              }
+            })
+            .catch(() => {
+              // Fallback to role-based defaults on error
+              setAccessibleTabs(roleDefaults[parsed.role] || ["orders"]);
+              const defaultTab = roleDefaults[parsed.role]?.[0] || "orders";
+              if (defaultTab === "dashboard") {
+                router.push("/dashboard");
+              } else {
+                router.push(`/dashboard?page=${defaultTab}`);
+              }
+            });
+        }
+      }
     }
+  }, []);
+
+  // Check if a tab is accessible based on role
+  const isTabAccessible = (tab: string): boolean => {
+    const roleTabs = getRoleBasedTabs();
+    // console.log( tab);
+    return roleTabs.includes(tab);
   };
 
   if (!isAuthenticated) return null;
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" dir="rtl">
-      {/* Header & Navigation */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <h1 className="font-serif text-3xl text-white font-bold">
-          پنل مدیریت کافه واژه
-        </h1>
-        <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-          <button
-            onClick={() => setActiveTab("dashboard")}
-            className={`flex items-center gap-2 whitespace-nowrap px-6 py-2 rounded-lg transition-colors font-bold ${
-              activeTab === "dashboard"
-                ? "bg-coffee-600 text-white"
-                : "bg-neutral-800 text-gray-400 hover:text-white"
-            }`}
-          >
-            <LayoutDashboard size={18} /> داشبورد
-          </button>
-          <button
-            onClick={() => setActiveTab("orders")}
-            className={`flex items-center gap-2 whitespace-nowrap px-6 py-2 rounded-lg transition-colors font-bold ${
-              activeTab === "orders"
-                ? "bg-coffee-600 text-white"
-                : "bg-neutral-800 text-gray-400 hover:text-white"
-            }`}
-          >
-            <Clock size={18} /> سفارشات (
-            {toPersianDigits(orders.filter(o => o.status === "pending").length)}
-            )
-          </button>
-          <button
-            onClick={() => setActiveTab("menu")}
-            className={`flex items-center gap-2 whitespace-nowrap px-6 py-2 rounded-lg transition-colors font-bold ${
-              activeTab === "menu"
-                ? "bg-coffee-600 text-white"
-                : "bg-neutral-800 text-gray-400 hover:text-white"
-            }`}
-          >
-            <Coffee size={18} /> مدیریت منو
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center justify-center gap-2 px-6 py-2 bg-red-900/50 hover:bg-red-900 text-red-100 rounded-lg transition-colors"
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
-      </div>
+  const pendingOrdersCount = orders.filter(o => o.status === "pending").length;
 
-      {activeTab === "dashboard" && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-neutral-900 p-6 rounded-2xl border border-white/5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-green-900/30 text-green-500 flex items-center justify-center">
-                <DollarSign size={24} />
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">فروش کل</p>
-                <h3 className="text-2xl font-bold text-white font-serif">
-                  {formatToman(stats.totalSales)}
-                </h3>
-              </div>
-            </div>
-
-            <div className="bg-neutral-900 p-6 rounded-2xl border border-white/5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-blue-900/30 text-blue-500 flex items-center justify-center">
-                <TrendingUp size={24} />
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">تعداد سفارشات</p>
-                <h3 className="text-2xl font-bold text-white font-serif">
-                  {toPersianDigits(stats.ordersCount)} سفارش
-                </h3>
-              </div>
-            </div>
-
-            <div className="bg-neutral-900 p-6 rounded-2xl border border-white/5 shadow-lg flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-purple-900/30 text-purple-500 flex items-center justify-center">
-                <Users size={24} />
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">بازدید سایت</p>
-                <h3 className="text-2xl font-bold text-white font-serif">
-                  {toPersianDigits(stats.visits)} بازدید
-                </h3>
-              </div>
-            </div>
+  // Render page content based on activePage
+  const renderPageContent = () => {
+    switch (activePage) {
+      case "dashboard":
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <DashboardStats
+              stats={stats}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              isDark={isDark}
+            />
           </div>
-
-          {/* Recent Activity / Pending Orders Preview */}
-          <div className="bg-neutral-900 rounded-2xl border border-white/5 overflow-hidden">
-            <div className="p-6 border-b border-white/5 flex justify-between items-center">
-              <h3 className="font-bold text-white">سفارشات اخیر</h3>
-              <button
-                onClick={() => setActiveTab("orders")}
-                className="text-sm text-coffee-400 hover:text-coffee-300"
-              >
-                مشاهده همه
-              </button>
-            </div>
-            <div className="divide-y divide-white/5">
-              {orders.slice(0, 5).map(order => (
-                <div
-                  key={order.id}
-                  className="p-4 flex justify-between items-center hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        order.status === "pending"
-                          ? "bg-yellow-500"
-                          : order.status === "completed"
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                      }`}
-                    ></span>
-                    <span className="text-white font-medium">
-                      {order.items.map(i => i.name).join(", ")}
-                    </span>
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    {new Date(order.createdAt).toLocaleTimeString("fa-IR")}
-                  </div>
-                </div>
-              ))}
-              {orders.length === 0 && (
-                <div className="p-8 text-center text-gray-500">
-                  سفارشی وجود ندارد.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "orders" && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h2 className="text-xl text-white font-bold mb-4">مدیریت سفارشات</h2>
-          <div className="bg-neutral-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
-            {orders.length === 0 ? (
-              <div className="p-12 text-center text-gray-500">
-                سفارشی یافت نشد.
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5">
-                {orders.map(order => (
-                  <div
-                    key={order.id}
-                    className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-neutral-900/50 hover:bg-neutral-900 transition-colors"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-bold ${
-                            order.status === "pending"
-                              ? "bg-yellow-500/20 text-yellow-500"
-                              : order.status === "completed"
-                              ? "bg-green-500/20 text-green-500"
-                              : "bg-red-500/20 text-red-500"
-                          }`}
-                        >
-                          {order.status === "pending"
-                            ? "در انتظار"
-                            : order.status === "completed"
-                            ? "تکمیل شده"
-                            : "لغو شده"}
-                        </span>
-                        <span className="text-gray-400 text-sm">
-                          {new Date(order.createdAt).toLocaleString("fa-IR")}
-                        </span>
-                      </div>
-                      <div className="text-white font-bold text-lg">
-                        {order.items
-                          .map(i => `${toPersianDigits(i.quantity)}x ${i.name}`)
-                          .join("، ")}
-                      </div>
-                      <div className="text-coffee-400 font-mono">
-                        مجموع: {formatToman(order.totalAmount)}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      {order.status === "pending" && (
-                        <>
-                          <button
-                            onClick={() =>
-                              updateOrderStatus(order.id, "completed")
-                            }
-                            className="p-2 bg-green-900/30 hover:bg-green-700 text-green-200 rounded-lg transition-colors border border-green-900/50 flex items-center gap-2"
-                          >
-                            <CheckCircle size={18} /> تکمیل
-                          </button>
-                          <button
-                            onClick={() =>
-                              updateOrderStatus(order.id, "cancelled")
-                            }
-                            className="p-2 bg-red-900/30 hover:bg-red-700 text-red-200 rounded-lg transition-colors border border-red-900/50 flex items-center gap-2"
-                          >
-                            <XCircle size={18} /> لغو
-                          </button>
-                        </>
-                      )}
-                      {order.status !== "pending" && (
-                        <span className="text-gray-600 italic text-sm">
-                          وضعیت تغییر یافته
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === "menu" && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* QR Code Section */}
-          <div className="flex gap-4 mb-8">
+        );
+      
+      case "orders":
+        return (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl text-white font-bold">مدیریت سفارشات</h2>
             <button
-              onClick={() => setShowQR(!showQR)}
-              className="flex items-center justify-center gap-2 px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors border border-white/10"
+              onClick={() => setShowManualOrderForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
             >
-              <QrCode size={18} /> {showQR ? "مخفی کردن QR" : "کد QR منو"}
+              <Plus size={18} />
+              سفارش دستی
             </button>
           </div>
 
-          {showQR && (
-            <div className="mb-12 p-8 bg-white rounded-2xl flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-top-4">
-              <h3 className="text-black font-serif text-2xl mb-4 font-bold">
-                اسکن برای منوی کافه واژه
-              </h3>
-              <div className="p-4 border-4 border-black rounded-xl mb-4 bg-white shadow-xl">
-                <QRCodeCanvas
-                  value={`${
-                    typeof window !== "undefined" ? window.location.origin : ""
-                  }/menu`}
-                  size={256}
-                  level={"H"}
-                  includeMargin={true}
-                  imageSettings={{
-                    src: "https://via.placeholder.com/40/000000/FFFFFF?text=VAJE",
-                    height: 40,
-                    width: 40,
-                    excavate: true
+          {/* Order Filters */}
+          <OrderFilters
+            value={orderFilter}
+            onChange={setOrderFilter}
+            onReset={() => {
+              setOrderFilter({
+                source: "all",
+                status: "all",
+                dateFrom: "",
+                dateTo: "",
+                search: "",
+                minAmount: "",
+                maxAmount: ""
+              });
+              setSelectedOrders(new Set());
+            }}
+            isDark={isDark}
+          />
+
+          {/* Bulk Actions */}
+          <OrderBulkActions
+            selectedCount={selectedOrders.size}
+            isDark={isDark}
+            onCompleteSelected={async () => {
+              if (confirm(`آیا می‌خواهید ${selectedOrders.size} سفارش را تکمیل کنید؟`)) {
+                for (const orderId of selectedOrders) {
+                  await handleOrderStatusChange(orderId, "completed");
+                }
+                setSelectedOrders(new Set());
+              }
+            }}
+            onCancelSelected={async () => {
+              if (confirm(`آیا می‌خواهید ${selectedOrders.size} سفارش را لغو کنید؟`)) {
+                for (const orderId of selectedOrders) {
+                  await handleOrderStatusChange(orderId, "cancelled");
+                }
+                setSelectedOrders(new Set());
+              }
+            }}
+            onClearSelection={() => setSelectedOrders(new Set())}
+          />
+
+          {/* Orders Table */}
+          {(() => {
+            // Filter orders
+            let filtered = filterOrders(orders as any, {
+              source: orderFilter.source === "all" ? undefined : orderFilter.source,
+              status: orderFilter.status === "all" ? undefined : orderFilter.status,
+              search: orderFilter.search || undefined
+            });
+
+            // Apply date filters using Jalali dates
+            if (orderFilter.dateFrom) {
+              const startDate = jalaliToTimestamp(orderFilter.dateFrom);
+              filtered = filtered.filter(order => {
+                let orderTimestamp = 0;
+                if (order.createdAt) {
+                  if (typeof order.createdAt === "string") {
+                    orderTimestamp = Math.floor(
+                      new Date(order.createdAt).getTime() / 1000
+                    );
+                  } else {
+                    orderTimestamp = order.createdAt;
+                  }
+                }
+                return orderTimestamp >= startDate;
+              });
+            }
+            if (orderFilter.dateTo) {
+              let endDate = jalaliToTimestamp(orderFilter.dateTo);
+              // Set end time to end of day
+              endDate = endDate + 24 * 60 * 60 - 1;
+              filtered = filtered.filter(order => {
+                let orderTimestamp = 0;
+                if (order.createdAt) {
+                  if (typeof order.createdAt === "string") {
+                    orderTimestamp = Math.floor(
+                      new Date(order.createdAt).getTime() / 1000
+                    );
+                  } else {
+                    orderTimestamp = order.createdAt;
+                  }
+                }
+                return orderTimestamp <= endDate;
+              });
+            }
+
+            // Apply amount filters
+            if (orderFilter.minAmount) {
+              const minAmount = parseFloat(orderFilter.minAmount);
+              filtered = filtered.filter(order => {
+                const total = order.totalAmount || order.totalPrice || 0;
+                return total >= minAmount;
+              });
+            }
+            if (orderFilter.maxAmount) {
+              const maxAmount = parseFloat(orderFilter.maxAmount);
+              filtered = filtered.filter(order => {
+                const total = order.totalAmount || order.totalPrice || 0;
+                return total <= maxAmount;
+              });
+            }
+
+            // Sort by date descending
+            filtered = sortOrders(filtered, "date", "desc");
+
+            const allFilteredSelected = filtered.length > 0 && filtered.every(order => selectedOrders.has(order.id));
+            const someFilteredSelected = filtered.some(order => selectedOrders.has(order.id));
+
+            return (
+              <div className="space-y-6">
+                {/* Select All Checkbox */}
+                {filtered.length > 0 && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-neutral-800/50">
+                    <button
+                      onClick={() => {
+                        if (allFilteredSelected) {
+                          // Deselect all filtered
+                          const newSelected = new Set(selectedOrders);
+                          filtered.forEach(order => newSelected.delete(order.id));
+                          setSelectedOrders(newSelected);
+                        } else {
+                          // Select all filtered
+                          const newSelected = new Set(selectedOrders);
+                          filtered.forEach(order => newSelected.add(order.id));
+                          setSelectedOrders(newSelected);
+                        }
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      {allFilteredSelected ? (
+                        <CheckSquare size={20} className="text-coffee-500" />
+                      ) : (
+                        <Square size={20} className="text-gray-400" />
+                      )}
+                      <span className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
+                        {allFilteredSelected ? "لغو انتخاب همه" : "انتخاب همه"}
+                      </span>
+                    </button>
+                    {someFilteredSelected && (
+                      <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}>
+                        ({toPersianDigits(selectedOrders.size.toString())} انتخاب شده)
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <OrdersTable
+                  orders={filtered as any}
+                  currentPage={ordersPage}
+                  itemsPerPage={ordersPerPage}
+                  onStatusChange={handleOrderStatusChange}
+                  selectedOrders={selectedOrders}
+                  onToggleSelect={(orderId) => {
+                    const newSelected = new Set(selectedOrders);
+                    if (newSelected.has(orderId)) {
+                      newSelected.delete(orderId);
+                    } else {
+                      newSelected.add(orderId);
+                    }
+                    setSelectedOrders(newSelected);
                   }}
+                  onViewDetail={(order) => {
+                    setSelectedOrderDetail(order);
+                    setShowOrderDetail(true);
+                  }}
+                  isDark={isDark}
                 />
+
+                {/* Pagination Controls */}
+                {(() => {
+                  const info = getPaginationInfo(
+                    filtered.length,
+                    ordersPage,
+                    ordersPerPage
+                  );
+
+                  if (info.pages <= 1) return null;
+
+                  return (
+                    <div className="flex justify-center items-center gap-3 p-4">
+                      <button
+                        onClick={() =>
+                          setOrdersPage(Math.max(1, ordersPage - 1))
+                        }
+                        disabled={!info.hasPrevPage}
+                        className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                      >
+                        قبلی
+                      </button>
+                      <span className="text-white text-sm font-medium px-4">
+                        صفحه {formatPersianNumber(info.page)} از{" "}
+                        {formatPersianNumber(info.pages)}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setOrdersPage(Math.min(info.pages, ordersPage + 1))
+                        }
+                        disabled={!info.hasNextPage}
+                        className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                      >
+                        بعدی
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
-              <p className="text-gray-600 font-sans text-lg dir-ltr">
-                vaje.cafe/menu
-              </p>
-            </div>
-          )}
-
-          {/* Footer Settings */}
-          <div className="bg-neutral-900 border border-white/5 p-6 rounded-2xl shadow-lg shadow-black/20 mb-8">
-            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-              <LinkIcon size={18} className="text-coffee-500" />
-              تنظیمات QR Code فوتر
-            </h3>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={localQrUrl}
-                onChange={e => setLocalQrUrl(e.target.value)}
-                className="flex-grow bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-white dir-ltr text-left placeholder-gray-600 focus:outline-none focus:border-coffee-500 transition-colors"
-              />
-              <button
-                onClick={handleQrSave}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-coffee-600 hover:bg-coffee-500 text-white rounded-lg transition-colors font-medium"
-              >
-                <Save size={18} />
-                ذخیره
-              </button>
-            </div>
-          </div>
-
+            );
+          })()}
+        </div>
+        );
+      
+      case "menu":
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
             {/* Form Section */}
             <div className="lg:col-span-1">
-              <div className="bg-neutral-900 border border-white/5 p-6 rounded-2xl sticky top-28 shadow-lg shadow-black/20">
-                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                  {isEditing ? (
-                    <Edit2 size={20} className="text-coffee-500" />
-                  ) : (
-                    <Plus size={20} className="text-coffee-500" />
-                  )}
-                  {isEditing ? "ویرایش آیتم" : "افزودن آیتم جدید"}
-                </h2>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">
-                      نام آیتم
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      value={formData.name}
-                      onChange={e =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      className="w-full bg-neutral-950 border border-neutral-800 rounded p-3 text-white focus:border-coffee-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">
-                      توضیحات
-                    </label>
-                    <textarea
-                      required
-                      rows={3}
-                      value={formData.description}
-                      onChange={e =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value
-                        })
-                      }
-                      className="w-full bg-neutral-950 border border-neutral-800 rounded p-3 text-white focus:border-coffee-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">
-                        قیمت (تومان)
-                      </label>
-                      <input
-                        required
-                        type="number"
-                        step="1000"
-                        value={formData.price}
-                        onChange={e =>
-                          setFormData({
-                            ...formData,
-                            price: parseFloat(e.target.value)
-                          })
-                        }
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-3 text-white focus:border-coffee-500 focus:outline-none transition-colors"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">
-                        دسته‌بندی
-                      </label>
-                      <select
-                        value={formData.category}
-                        onChange={e =>
-                          setFormData({ ...formData, category: e.target.value })
-                        }
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-3 text-white focus:border-coffee-500 focus:outline-none transition-colors"
-                      >
-                        {CATEGORIES.map(cat => (
-                          <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">
-                      تصویر
-                    </label>
-                    <div className="space-y-2">
-                      {/* Link Input */}
-                      <input
-                        type="text"
-                        value={formData.imageUrl || ""}
-                        onChange={e =>
-                          setFormData({ ...formData, imageUrl: e.target.value })
-                        }
-                        placeholder="لینک تصویر (اختیاری)"
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded p-3 text-white focus:border-coffee-500 focus:outline-none dir-ltr text-right"
-                      />
-                      <div className="text-center text-gray-500 text-xs">
-                        یا آپلود فایل
-                      </div>
-                      {/* File Input */}
-                      <div className="relative border border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-coffee-500 transition-colors bg-neutral-950">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageChange}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div className="flex flex-col items-center gap-2">
-                          <Upload size={20} className="text-gray-400" />
-                          <span className="text-xs text-gray-400">
-                            {imageFile
-                              ? imageFile.name
-                              : "انتخاب تصویر از دستگاه"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 bg-neutral-950 p-3 rounded border border-neutral-800">
-                    <input
-                      type="checkbox"
-                      id="available"
-                      checked={formData.available}
-                      onChange={e =>
-                        setFormData({
-                          ...formData,
-                          available: e.target.checked
-                        })
-                      }
-                      className="w-4 h-4 rounded border-gray-600 text-coffee-600 focus:ring-coffee-500 bg-neutral-900"
-                    />
-                    <label
-                      htmlFor="available"
-                      className="text-sm text-gray-300 cursor-pointer"
-                    >
-                      موجود برای سفارش
-                    </label>
-                  </div>
-
-                  <div className="pt-4 flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="flex-1 bg-coffee-600 hover:bg-coffee-500 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-                    >
-                      {isSubmitting
-                        ? "در حال ذخیره..."
-                        : isEditing
-                        ? "بروزرسانی"
-                        : "افزودن به منو"}
-                    </button>
-                    {isEditing && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditing(null);
-                          setFormData({
-                            name: "",
-                            description: "",
-                            price: 0,
-                            category: "اسپرسو",
-                            available: true,
-                            imageUrl: ""
-                          });
-                          setImageFile(null);
-                        }}
-                        className="px-6 py-3 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors"
-                      >
-                        انصراف
-                      </button>
-                    )}
-                  </div>
-                </form>
-              </div>
+              <MenuItemForm
+                editingItem={menuItems.editingItem}
+                onSubmit={menuItems.handleSubmit}
+                onCancel={menuItems.handleCancel}
+                onManageIngredients={() => {
+                  if (menuItems.editingItem) {
+                    setIngredientModalItemId(menuItems.editingItem.id);
+                    setShowIngredientModal(true);
+                  }
+                }}
+                isDark={isDark}
+                isSubmitting={menuItems.isSubmitting}
+              />
             </div>
 
             {/* List Section */}
             <div className="lg:col-span-2">
-              <div className="bg-neutral-900 border border-white/5 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
-                <div className="px-6 py-5 border-b border-white/5 bg-neutral-900/50 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-300 text-lg">
-                    آیتم‌های منو ({toPersianDigits(items.length)})
-                  </h3>
-                </div>
-                <div className="divide-y divide-white/5">
-                  {items.length === 0 && (
-                    <div className="p-12 text-center text-gray-500 text-lg">
-                      هنوز آیتمی به منو اضافه نشده است.
-                    </div>
-                  )}
-                  {items.map(item => (
-                    <div
-                      key={item.id}
-                      className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors group"
-                    >
-                      <img
-                        src={
-                          item.imageUrl ||
-                          `https://picsum.photos/100/100?random=${item.id}`
-                        }
-                        alt={item.name}
-                        className="w-20 h-20 rounded-lg object-cover bg-neutral-800"
-                      />
-                      <div className="flex-grow">
-                        <div className="flex items-baseline justify-between mb-2">
-                          <h4 className="font-bold text-white text-lg">
-                            {item.name}
-                          </h4>
-                          <span className="text-coffee-400 font-mono text-lg font-bold">
-                            {formatToman(item.price)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-500 line-clamp-1 mb-2 leading-6">
-                          {item.description}
-                        </p>
-                        <div className="flex gap-2">
-                          <span className="text-xs font-medium px-2 py-1 rounded bg-neutral-800 text-gray-300 border border-white/5">
-                            {item.category}
-                          </span>
-                          {!item.available && (
-                            <span className="text-xs font-medium px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-900/50">
-                              ناموجود
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-2.5 bg-neutral-800 hover:bg-coffee-600 hover:text-white text-gray-400 rounded-lg transition-colors"
-                          title="ویرایش"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2.5 bg-neutral-800 hover:bg-red-600 hover:text-white text-gray-400 rounded-lg transition-colors"
-                          title="حذف"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <MenuTable
+                items={items}
+                onEdit={menuItems.handleEdit}
+                onDelete={menuItems.handleDelete}
+                onManageIngredients={(itemId) => {
+                  setIngredientModalItemId(itemId);
+                  setShowIngredientModal(true);
+                }}
+                onTogglePin={async (itemId: string, isPinned: boolean) => {
+                  try {
+                    await updateItem(itemId, { is_pinned: isPinned } as any);
+                  } catch (err) {
+                    console.error("Failed to toggle pin:", err);
+                    alert("خطا در تغییر وضعیت ثابت کردن");
+                  }
+                }}
+                onToggleSuggest={async (itemId: string, isSuggested: boolean) => {
+                  try {
+                    await updateItem(itemId, { is_suggested: isSuggested } as any);
+                  } catch (err) {
+                    console.error("Failed to toggle suggest:", err);
+                    alert("خطا در تغییر وضعیت پیشنهاد");
+                  }
+                }}
+                onReorder={async (itemOrders: Array<{ id: string; display_order: number }>) => {
+                  try {
+                    const adminToken = process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
+                    const response = await fetch("/api/menu/reorder", {
+                      method: "PUT",
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...(adminToken ? { "x-access-token": adminToken } : {}),
+                      },
+                      credentials: "include",
+                      body: JSON.stringify({ itemOrders }),
+                    });
+                    if (response.ok) {
+                      // MenuContext will automatically refresh via subscribeToMenu
+                      alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
+                    } else {
+                      throw new Error("Failed to reorder");
+                    }
+                  } catch (err) {
+                    console.error("Failed to reorder items:", err);
+                    alert("خطا در تغییر ترتیب آیتم‌ها");
+                  }
+                }}
+                isDark={isDark}
+              />
             </div>
           </div>
         </div>
+        );
+      
+      case "inventory":
+        if (!isTabAccessible("inventory")) return null;
+        return (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Inventory Overview Cards */}
+            <InventoryOverview
+              lowStockCount={lowStockAlerts.length}
+              inventoryValue={inventoryValue}
+              suppliersCount={suppliers.length}
+              isDark={isDark}
+            />
+
+            {/* Low Stock Alerts List */}
+            <LowStockAlerts alerts={lowStockAlerts} isDark={isDark} />
+
+            {/* Restock Recommendations */}
+            <RestockRecommendations
+              recommendations={restockRecommendations}
+              isDark={isDark}
+            />
+
+            {/* Suppliers Management */}
+            <SuppliersList
+              suppliers={suppliers}
+              selectedSupplier={selectedSupplier}
+              onSelectSupplier={setSelectedSupplier}
+              isDark={isDark}
+            />
+
+            <div className="flex justify-between items-center flex-wrap gap-4">
+            <h2
+              className={`text-xl font-bold ${
+                isDark ? "text-white" : "text-gray-900"
+              }`}
+            >
+              مدیریت موجودی
+            </h2>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setInventoryTypeFilter("all")}
+                className={`px-4 py-2 rounded-lg font-bold transition ${
+                  inventoryTypeFilter === "all"
+                    ? "bg-coffee-600 text-white"
+                    : isDark
+                    ? "bg-neutral-800 text-gray-400 hover:text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                همه
+              </button>
+              <button
+                onClick={() => setInventoryTypeFilter("raw_material")}
+                className={`px-4 py-2 rounded-lg font-bold transition ${
+                  inventoryTypeFilter === "raw_material"
+                    ? "bg-coffee-600 text-white"
+                    : isDark
+                    ? "bg-neutral-800 text-gray-400 hover:text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                مواد اولیه
+              </button>
+              <button
+                onClick={() => setInventoryTypeFilter("packed_product")}
+                className={`px-4 py-2 rounded-lg font-bold transition ${
+                  inventoryTypeFilter === "packed_product"
+                    ? "bg-coffee-600 text-white"
+                    : isDark
+                    ? "bg-neutral-800 text-gray-400 hover:text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                محصولات بسته‌بندی
+              </button>
+              <button
+                onClick={() => setShowNewProductForm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
+              >
+                <Plus size={18} />
+                افزودن محصول
+              </button>
+            </div>
+          </div>
+
+          {/* Products Table */}
+          <div
+            className={`overflow-x-auto rounded-2xl border ${
+              isDark
+                ? "bg-neutral-900 border-white/5"
+                : "bg-white border-gray-300"
+            }`}
+          >
+            <table className="w-full">
+              <thead>
+                <tr
+                  className={`border-b ${
+                    isDark ? "border-white/5" : "border-gray-300"
+                  }`}
+                >
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    نوع
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    نام
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    دسته
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    واحد
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    موجودی
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    حداقل
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    قیمت
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    تامین‌کننده
+                  </th>
+                  <th
+                    className={`text-right px-6 py-4 font-bold ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    عملیات
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className={`px-6 py-12 text-center ${
+                        isDark ? "text-gray-500" : "text-gray-400"
+                      }`}
+                    >
+                      محصولی وجود ندارد
+                    </td>
+                  </tr>
+                ) : (
+                  products.map(product => (
+                    <tr
+                      key={product.id}
+                      onClick={() => setSelectedProduct(product)}
+                      className={`border-b cursor-pointer transition ${
+                        isDark
+                          ? "border-white/5 hover:bg-white/5"
+                          : "border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <td
+                        className={`px-6 py-4 text-sm ${
+                          product.type === "raw_material"
+                            ? "text-blue-400"
+                            : "text-purple-400"
+                        }`}
+                      >
+                        {product.type === "raw_material"
+                          ? "مواد اولیه"
+                          : "بسته‌بندی"}
+                      </td>
+                      <td
+                        className={`px-6 py-4 font-semibold ${
+                          isDark ? "text-white" : "text-gray-900"
+                        }`}
+                      >
+                        {product.name}
+                      </td>
+                      <td
+                        className={`px-6 py-4 text-sm ${
+                          isDark ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {product.category}
+                      </td>
+                      <td
+                        className={`px-6 py-4 text-sm ${
+                          isDark ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {product.unit}
+                      </td>
+                      <td
+                        className={`px-6 py-4 font-semibold ${
+                          product.currentStock < product.minStock
+                            ? "text-red-400"
+                            : "text-green-400"
+                        }`}
+                      >
+                        {toPersianDigits(product.currentStock.toString())}
+                      </td>
+                      <td
+                        className={`px-6 py-4 text-sm ${
+                          isDark ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {toPersianDigits(product.minStock.toString())}
+                      </td>
+                      <td
+                        className={`px-6 py-4 font-semibold ${
+                          isDark ? "text-amber-400" : "text-amber-600"
+                        }`}
+                      >
+                        {formatToman(product.price)}
+                      </td>
+                      <td
+                        className={`px-6 py-4 text-sm ${
+                          isDark ? "text-gray-400" : "text-gray-600"
+                        }`}
+                      >
+                        {product.supplier || "-"}
+                      </td>
+                      <td
+                        className="px-6 py-4"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleViewLogs(product.id)}
+                            className="p-1 hover:bg-blue-500/20 rounded transition"
+                            title="تاریخچه"
+                          >
+                            <History size={18} className="text-blue-500" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(product.id)}
+                            className="p-1 hover:bg-red-500/20 rounded transition"
+                            title="حذف"
+                          >
+                            <Trash2 size={18} className="text-red-500" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          </div>
+        );
+      
+      case "branches":
+        if (!isTabAccessible("branches")) return null;
+        return <BranchesManagement isDark={isDark} />;
+      
+      case "customers":
+        if (!isTabAccessible("customers")) return null;
+        return <CustomersManagement isDark={isDark} />;
+      
+      case "settings":
+        if (!isTabAccessible("settings")) return null;
+        return <SiteSettings isDark={isDark} />;
+      
+      case "banners":
+        if (!isTabAccessible("banners")) return null;
+        return <BannerManager isDark={isDark} />;
+      
+      case "working-hours":
+        if (!isTabAccessible("working-hours")) return null;
+        return <WorkingHoursManager isDark={isDark} />;
+      
+      case "stats":
+        if (!isTabAccessible("stats")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <DashboardStats
+              stats={stats}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              isDark={isDark}
+            />
+          </div>
+        );
+      
+      case "customer-orders":
+        if (!isTabAccessible("customer-orders")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <CustomerOrders orders={orders} isDark={isDark} />
+          </div>
+        );
+      
+      case "expenses":
+        if (!isTabAccessible("expenses")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ExpenseManager isDark={isDark} />
+          </div>
+        );
+      
+      case "ratings":
+        if (!isTabAccessible("ratings")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <RatingsApproval isDark={isDark} />
+          </div>
+        );
+      
+      case "customer-messages":
+        if (!isTabAccessible("customer-messages")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <CustomerMessagesManager isDark={isDark} />
+          </div>
+        );
+      
+      case "loyalty":
+        if (!isTabAccessible("loyalty")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <LoyaltyProgramManager isDark={isDark} />
+          </div>
+        );
+      
+      case "staff":
+        if (!isTabAccessible("staff")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <StaffManagement isDark={isDark} />
+          </div>
+        );
+      
+      case "gallery":
+        if (!isTabAccessible("gallery")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <GalleryManager isDark={isDark} />
+          </div>
+        );
+      
+      case "stories":
+        if (!isTabAccessible("stories")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <StoryManager isDark={isDark} />
+          </div>
+        );
+      
+      case "experience-comments":
+        if (!isTabAccessible("experience-comments")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ExperienceCommentsManager isDark={isDark} />
+          </div>
+        );
+      
+      case "reports":
+        if (!isTabAccessible("reports")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ReportsManager isDark={isDark} />
+          </div>
+        );
+      
+      case "waste":
+        if (!isTabAccessible("waste")) return null;
+        return (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <WasteManager isDark={isDark} />
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex h-screen overflow-hidden" dir="rtl">
+      {/* Sidebar */}
+      <DashboardSidebar
+        isDark={isDark}
+        userRole={userRole}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        pendingOrdersCount={pendingOrdersCount}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className={cn("border-b", isDark ? "bg-neutral-900 border-white/10" : "bg-white border-gray-200")}>
+          <div className="px-6 py-4">
+            <DashboardHeader
+              title="پنل مدیریت کافه واژه"
+              selectedBranchId={selectedBranchId}
+              onBranchChange={setSelectedBranchId}
+              isDark={isDark}
+              onLogout={handleLogout}
+              onToggleTheme={toggleTheme}
+              pendingOrdersCount={pendingOrdersCount}
+              userRole={userRole}
+            />
+          </div>
+        </div>
+
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {renderPageContent()}
+          </div>
+        </div>
+      </div>
+
+      {/* Manual Order Form Modal */}
+      {showManualOrderForm && (
+        <ManualOrderForm
+          items={items}
+          isDark={isDark}
+          onSubmit={async orderData => {
+            try {
+              const response = await fetch("/api/orders", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+                },
+                body: JSON.stringify(orderData)
+              });
+
+              if (response.ok) {
+                await response.json();
+                alert("سفارش دستی با موفقیت ثبت شد");
+                setShowManualOrderForm(false);
+
+                // Switch to customer-orders page to show the new order immediately
+                router.push("/dashboard?page=customer-orders");
+
+                // Optional: Force a refresh of orders from API
+                try {
+                  await new Promise(resolve => setTimeout(resolve, 300));
+                  // The context's subscription will handle the update automatically
+                  // but we can also manually fetch to ensure immediate visibility
+                  const ordersRes = await fetch("/api/orders");
+                  if (ordersRes.ok) {
+                    await ordersRes.json();
+                    // Orders will be updated through context subscription
+                  }
+                } catch (fetchError) {
+                  console.error("Error refreshing orders:", fetchError);
+                  // Still show success - the subscription will catch the update
+                }
+              } else {
+                const error = await response.json().catch(() => ({}));
+                alert(`خطا در ثبت سفارش: ${error.error || "Unknown error"}`);
+              }
+            } catch (error) {
+              console.error(error);
+              alert("خطا در ثبت سفارش");
+            }
+          }}
+          onClose={() => setShowManualOrderForm(false)}
+        />
       )}
+
+      {/* Product Modal - for both add and edit */}
+      {(showNewProductForm || selectedProduct) && (
+        <RawMaterialModal
+          material={selectedProduct || undefined}
+          isDark={isDark}
+          onClose={() => {
+            setShowNewProductForm(false);
+            setSelectedProduct(null);
+          }}
+          onSave={async product => {
+            if (selectedProduct) {
+              // Edit mode
+              await handleSaveProduct(product);
+            } else {
+              // Add mode - ensure type is set
+              const productData = {
+                ...product,
+                type:
+                  product.type ||
+                  (inventoryTypeFilter === "packed_product"
+                    ? "packed_product"
+                    : "raw_material")
+              };
+              await handleAddProduct(productData);
+            }
+            setShowNewProductForm(false);
+            setSelectedProduct(null);
+          }}
+          onDelete={selectedProduct ? handleDeleteProduct : undefined}
+        />
+      )}
+
+      {/* Inventory Logs Modal */}
+      {showLogsModal && selectedProduct && (
+        <InventoryLogsModal
+          isOpen={showLogsModal}
+          onClose={() => {
+            setShowLogsModal(false);
+            setSelectedProductLogs([]);
+          }}
+          logs={selectedProductLogs}
+          productName={selectedProduct.name}
+          isDark={isDark}
+        />
+      )}
+
+      {/* Ingredient Modal */}
+      {showIngredientModal && ingredientModalItemId && (
+        <IngredientModal
+          isOpen={showIngredientModal}
+          onClose={() => {
+            setShowIngredientModal(false);
+            setIngredientModalItemId("");
+          }}
+          menuItemId={ingredientModalItemId}
+          onSave={() => {
+            // Refresh menu items or show success
+          }}
+          isDark={isDark}
+        />
+      )}
+
+      {/* Order Detail Modal */}
+      <OrderDetailModal
+        isOpen={showOrderDetail}
+        order={selectedOrderDetail}
+        onClose={() => {
+          setShowOrderDetail(false);
+          setSelectedOrderDetail(null);
+        }}
+        isDark={isDark}
+        showTimeline={true}
+      />
+
+      {/* Stock Adjustment Modal */}
+      <StockAdjustmentModal
+        isOpen={showStockAdjustment}
+        product={adjustmentProduct}
+        isDark={isDark}
+        onClose={() => {
+          setShowStockAdjustment(false);
+          setAdjustmentProduct(null);
+        }}
+        onSave={handleStockAdjustment}
+      />
     </div>
   );
 }
+
+// Branches Management is now a separate component

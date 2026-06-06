@@ -1,46 +1,32 @@
 "use server";
 
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { increment, getDoc, doc, setDoc } from "firebase/firestore";
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-};
-
-// Initialize Firebase for server-side use
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-
-const STATS_COLLECTION = "stats";
-const STATS_DOC_ID = "general";
+import { cookies } from "next/headers";
 
 export async function incrementVisitCountServer() {
   try {
-    const statsRef = doc(db, STATS_COLLECTION, STATS_DOC_ID);
-    const statsDoc = await getDoc(statsRef);
+    // Use relative path and make fetch with proper headers
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
-    if (statsDoc.exists()) {
-      await setDoc(
-        statsRef,
-        {
-          visits: increment(1)
-        },
-        { merge: true }
-      );
-    } else {
-      await setDoc(statsRef, {
-        visits: 1,
-        totalSales: 0,
-        ordersCount: 0
-      });
+    const response = await fetch(`${baseUrl}/api/stats`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        action: "visit",
+        data: { page: "home" }
+      }),
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      console.error("Failed to record visit:", response.statusText);
+      return { success: false };
     }
+
+    return { success: true };
   } catch (error) {
     console.error("Error incrementing visit count:", error);
+    return { success: false, error };
   }
 }

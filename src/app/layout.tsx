@@ -22,9 +22,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fa" dir="rtl">
+    <html lang="fa" dir="rtl" className={vazirmatn.variable}>
       <body
-        className={`${vazirmatn.variable} min-h-screen flex flex-col font-sans text-stone-200 bg-neutral-950 selection:bg-coffee-500 selection:text-white`}
+        className="min-h-screen flex flex-col font-sans dark:text-stone-200 dark:bg-neutral-950 bg-primary-500 text-white selection:bg-coffee-500 selection:text-white"
       >
         <Providers>
           <main className="flex-grow">{children}</main>

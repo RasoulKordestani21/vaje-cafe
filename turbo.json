@@ -1,0 +1,30 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["package.json", "tsconfig.json", ".env.local"],
+  "globalEnv": ["NODE_ENV"],
+  "experimentalUI": true,
+  "pipeline": {
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "interactive": true
+    },
+    "build": {
+      "outputs": [".next/**", "dist/**", "build/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "public/**",
+        "tsconfig.json",
+        "next.config.mjs"
+      ]
+    },
+    "start": {
+      "cache": false,
+      "interactive": true
+    },
+    "lint": {
+      "outputs": []
+    }
+  }
+}

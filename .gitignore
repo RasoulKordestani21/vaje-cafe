@@ -2,3 +2,14 @@ node_modules/
 .next/
 .env.local
 .env.development.local
+
+# Local IDE / debug
+.cursor/
+
+# SQLite database (local dev data)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Accidental folder name — breaks Git path resolution on Windows
+.../

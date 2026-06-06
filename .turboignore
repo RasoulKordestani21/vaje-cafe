@@ -1,0 +1,45 @@
+# Turbo should ignore these files/folders
+
+# Version control
+.git
+.gitignore
+.github
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+.next
+dist
+build
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment
+.env.local
+.env.*.local
+
+# Database
+*.db
+vaje-cafe-data/
+
+# Cache
+.turbo
+.cache

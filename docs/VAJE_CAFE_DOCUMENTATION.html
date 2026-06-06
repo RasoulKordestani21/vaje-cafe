@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vaje Cafe — Full System Documentation</title>
+  <style>
+    :root {
+      --coffee-900: #1a1209;
+      --coffee-800: #381e19;
+      --coffee-700: #5e3a33;
+      --coffee-600: #00422a;
+      --coffee-500: #00543a;
+      --coffee-400: #a77f70;
+      --coffee-300: #d2bab0;
+      --coffee-100: #eaddd7;
+      --accent: #d2691e;
+      --surface: #111111;
+      --surface-2: #1a1a1a;
+      --surface-3: #242424;
+      --border: rgba(255,255,255,0.08);
+      --text: #eaddd7;
+      --text-muted: #a77f70;
+      --gradient: linear-gradient(135deg, #00422a 0%, #381e19 50%, #5e3a33 100%);
+      --glow: 0 0 40px rgba(0, 66, 42, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+      background: var(--surface);
+      color: var(--text);
+      line-height: 1.75;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative !important; height: auto !important; }
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--surface-2);
+      border-left: 1px solid var(--border);
+      padding: 1.5rem 1rem;
+    }
+
+    .sidebar-logo {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      color: var(--coffee-100);
+      margin-bottom: 0.25rem;
+    }
+
+    .sidebar-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-group {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--coffee-400);
+      margin: 1.25rem 0 0.5rem;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      color: var(--coffee-300);
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .sidebar a:hover {
+      background: rgba(0, 66, 42, 0.25);
+      color: var(--coffee-100);
+    }
+
+    /* ── Main ── */
+    main { padding: 0; overflow-x: hidden; }
+
+    /* ── Hero ── */
+    .hero {
+      background: var(--gradient);
+      padding: 4rem 3rem 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 80%, rgba(210,105,30,0.15), transparent 50%),
+                  radial-gradient(circle at 80% 20%, rgba(0,84,58,0.3), transparent 50%);
+    }
+
+    .hero-content { position: relative; max-width: 800px; }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 0.35rem 1rem;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--coffee-300);
+      margin-bottom: 1.25rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+      color: #fff;
+    }
+
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--coffee-300);
+      max-width: 600px;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    .hero-meta span {
+      background: rgba(0,0,0,0.25);
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: var(--coffee-100);
+    }
+
+    /* ── Sections ── */
+    section {
+      padding: 3rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section:nth-child(even) { background: var(--surface-2); }
+
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--coffee-100);
+      margin-bottom: 0.5rem;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 2rem 0 0.75rem;
+    }
+
+    h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--coffee-300);
+      margin: 1.25rem 0 0.5rem;
+    }
+
+    .section-desc {
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      max-width: 720px;
+    }
+
+    p { margin-bottom: 0.75rem; color: var(--coffee-300); }
+
+    /* ── Cards ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .card {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--glow);
+    }
+
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(0, 66, 42, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card h4 { margin: 0 0 0.5rem; color: var(--coffee-100); font-size: 1rem; }
+    .card p { font-size: 0.875rem; margin: 0; }
+
+    /* ── Flow diagrams ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 1.5rem 0;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: 19px;
+      top: 42px;
+      width: 2px;
+      height: calc(100% - 10px);
+      background: linear-gradient(to bottom, var(--coffee-600), transparent);
+    }
+
+    .flow-num {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--coffee-600);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      box-shadow: 0 0 0 4px rgba(0,66,42,0.25);
+      z-index: 1;
+    }
+
+    .flow-body {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      flex: 1;
+      margin-bottom: 1rem;
+    }
+
+    .flow-body strong { color: var(--coffee-100); display: block; margin-bottom: 0.25rem; }
+    .flow-body span { font-size: 0.875rem; color: var(--text-muted); }
+
+    .flow-body code {
+      display: inline-block;
+      background: rgba(0,0,0,0.35);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: #7ec8a4;
+      direction: ltr;
+    }
+
+    /* ── Horizontal flow ── */
+    .flow-h {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .flow-h-box {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1.1rem;
+      font-size: 0.85rem;
+      text-align: center;
+      min-width: 110px;
+    }
+
+    .flow-h-box.highlight {
+      border-color: var(--coffee-500);
+      background: rgba(0,66,42,0.2);
+    }
+
+    .flow-h-arrow {
+      color: var(--coffee-400);
+      font-size: 1.25rem;
+    }
+
+    /* ── Roadmap ── */
+    .roadmap {
+      position: relative;
+      padding-right: 2rem;
+    }
+
+    .roadmap::before {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(to bottom, var(--coffee-600), var(--accent), var(--coffee-400));
+      border-radius: 3px;
+    }
+
+    .roadmap-item {
+      position: relative;
+      padding: 0 2rem 2rem 0;
+    }
+
+    .roadmap-item::before {
+      content: "";
+      position: absolute;
+      right: -6px;
+      top: 6px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--coffee-600);
+      border: 3px solid var(--surface);
+      box-shadow: 0 0 0 2px var(--coffee-600);
+    }
+
+    .roadmap-item.done::before { background: #10b981; box-shadow: 0 0 0 2px #10b981; }
+    .roadmap-item.active::before { background: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+    .roadmap-phase {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--coffee-400);
+    }
+
+    .roadmap-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--coffee-100);
+      margin: 0.25rem 0;
+    }
+
+    .roadmap-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(0,66,42,0.3);
+      color: #7ec8a4;
+      border: 1px solid rgba(0,84,58,0.4);
+    }
+
+    .tag.done { background: rgba(16,185,129,0.15); color: #6ee7b7; border-color: rgba(16,185,129,0.3); }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      background: rgba(0,66,42,0.3);
+      color: var(--coffee-100);
+      padding: 0.75rem 1rem;
+      text-align: right;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--coffee-300);
+    }
+
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    td code, .inline-code {
+      direction: ltr;
+      display: inline-block;
+      background: rgba(0,0,0,0.35);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      color: #7ec8a4;
+      font-family: Consolas, monospace;
+    }
+
+    /* ── Architecture diagram ── */
+    .arch {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .arch-layer {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .arch-layer-title {
+      background: rgba(0,66,42,0.4);
+      padding: 0.6rem 1rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--coffee-100);
+      text-align: center;
+    }
+
+    .arch-items { padding: 0.75rem; }
+
+    .arch-item {
+      background: var(--surface-3);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--coffee-300);
+      direction: ltr;
+      text-align: left;
+    }
+
+    .arch-arrow {
+      text-align: center;
+      color: var(--coffee-400);
+      font-size: 1.5rem;
+      padding: 0.5rem 0;
+    }
+
+    /* ── File tree ── */
+    .file-tree {
+      background: #0d0d0d;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.8rem;
+      line-height: 1.8;
+      direction: ltr;
+      text-align: left;
+      overflow-x: auto;
+      color: #a8b5a0;
+    }
+
+    .file-tree .dir { color: #7ec8a4; }
+    .file-tree .file { color: var(--coffee-300); }
+    .file-tree .comment { color: #666; }
+
+    /* ── Docs list ── */
+    .docs-list {
+      list-style: none;
+    }
+
+    .docs-list li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 0.5rem;
+      background: var(--surface-3);
+    }
+
+    .docs-list li:hover { border-color: var(--coffee-600); }
+
+    .docs-list .doc-icon { font-size: 1.25rem; }
+
+    .docs-list strong { color: var(--coffee-100); display: block; font-size: 0.9rem; }
+    .docs-list span { font-size: 0.8rem; color: var(--text-muted); }
+
+    /* ── Footer ── */
+    footer {
+      padding: 2rem 3rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      background: var(--surface-2);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(16,185,129,0.15);
+      color: #6ee7b7;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      border: 1px solid rgba(16,185,129,0.3);
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">CAFE VAJE</div>
+    <div class="sidebar-sub">System Documentation v1.0</div>
+
+    <div class="nav-group">Overview</div>
+    <a href="#overview">Project Overview</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#tech-stack">Tech Stack</a>
+
+    <div class="nav-group">Roadmap</div>
+    <a href="#roadmap">Development Phases</a>
+    <a href="#features">Feature Modules</a>
+
+    <div class="nav-group">Flows</div>
+    <a href="#flow-customer">Customer Flow</a>
+    <a href="#flow-admin">Admin Flow</a>
+    <a href="#flow-staff">Staff Flow</a>
+    <a href="#flow-order">Order Lifecycle</a>
+    <a href="#flow-auth">Authentication</a>
+
+    <div class="nav-group">Reference</div>
+    <a href="#routes">Pages & Routes</a>
+    <a href="#api">API Endpoints</a>
+    <a href="#database">Database Schema</a>
+    <a href="#roles">Roles & Permissions</a>
+    <a href="#files">File Structure</a>
+    <a href="#related-docs">Related Docs</a>
+    <a href="#getting-started">Getting Started</a>
+  </nav>
+
+  <!-- Main content -->
+  <main>
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-content">
+        <div class="hero-badge">☕ Vaje Cafe Management Platform</div>
+        <h1>مستندات کامل سیستم<br>کافه واژه</h1>
+        <p>
+          یک پلتفرم جامع مدیریت کافه مبتنی بر Next.js 14 — شامل داشبورد ادمین،
+          منوی دیجیتال، سفارش‌گیری، موجودی، وفاداری، گالری، استوری و تحلیل فروش.
+        </p>
+        <div class="hero-meta">
+          <span>Next.js 14 + TypeScript</span>
+          <span>SQLite (better-sqlite3)</span>
+          <span>Port 3002</span>
+          <span class="status-badge">Production Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overview -->
+    <section id="overview">
+      <h2>Project Overview</h2>
+      <p class="section-desc">
+        <strong>Vaje Cafe</strong> یک سیستم end-to-end برای مدیریت کافه است که سه جهان مجزا دارد:
+        مشتری (وب‌سایت عمومی)، ادمین (داشبورد مدیریت) و پرسنل (پنل کارکنان).
+        تمام داده‌ها در SQLite ذخیره می‌شود و API از Next.js App Router تامین می‌شود.
+      </p>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">🌐</div>
+          <h4>Public Website</h4>
+          <p>صفحه اصلی، منوی دیجیتال، گالری، نظرات تجربه، استوری اینستاگرامی، پروفایل مشتری</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h4>Admin Dashboard</h4>
+          <p>مدیریت منو، سفارشات، موجودی، شعب، مشتریان، گزارش‌ها، تنظیمات سایت و تم</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">👨‍🍳</div>
+          <h4>Kitchen & POS</h4>
+          <p>صفحات آشپزخانه و صندوق فروش برای مدیریت real-time سفارشات</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔐</div>
+          <h4>Triple Auth System</h4>
+          <p>سه سیستم احراز هویت جدا: Admin (ایمیل)، Customer (OTP)، Staff (ایمیل)</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture -->
+    <section id="architecture">
+      <h2>System Architecture</h2>
+      <p class="section-desc">جریان کلی داده از مرورگر تا دیتابیس SQLite</p>
+
+      <div class="flow-h">
+        <div class="flow-h-box highlight">Browser<br><small>React Client</small></div>
+        <span class="flow-h-arrow">←</span>
+        <div class="flow-h-box">Next.js Pages<br><small>App Router</small></div>
+        <span class="flow-h-arrow">←</span>
+        <div class="flow-h-box">API Routes<br><small>/api/*</small></div>
+        <span class="flow-h-arrow">←</span>
+        <div class="flow-h-box">Services / Lib<br><small>Business Logic</small></div>
+        <span class="flow-h-arrow">←</span>
+        <div class="flow-h-box highlight">SQLite DB<br><small>vaje-cafe.db</small></div>
+      </div>
+
+      <div class="arch">
+        <div class="arch-layer">
+          <div class="arch-layer-title">🖥 Frontend Layers</div>
+          <div class="arch-items">
+            <div class="arch-item">(user)/ — Public pages</div>
+            <div class="arch-item">(admin)/ — Dashboard</div>
+            <div class="arch-item">(auth)/ — Login/Reset</div>
+            <div class="arch-item">staff/ — Staff panel</div>
+            <div class="arch-item">customer/ — OTP login</div>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-layer-title">🧠 State & Context</div>
+          <div class="arch-items">
+            <div class="arch-item">MenuContext — Admin auth + menu</div>
+            <div class="arch-item">CustomerContext — Customer OTP</div>
+            <div class="arch-item">ThemeContext — Dark/Light + CSS vars</div>
+            <div class="arch-item">ThemeConfigProvider — Dynamic theme</div>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-layer-title">⚙️ Core Services</div>
+          <div class="arch-items">
+            <div class="arch-item">authService.ts — Sessions</div>
+            <div class="arch-item">database.ts — Schema + init</div>
+            <div class="arch-item">productsService.ts — Inventory</div>
+            <div class="arch-item">imageService.ts — Compression</div>
+            <div class="arch-item">emailService.ts — OTP emails</div>
+            <div class="arch-item">themeService.ts — CSS variables</div>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <div class="arch-layer-title">🛡 Middleware</div>
+          <div class="arch-items">
+            <div class="arch-item">middleware.ts</div>
+            <div class="arch-item">Protects /dashboard/*</div>
+            <div class="arch-item">Checks auth_token cookie</div>
+            <div class="arch-item">Redirects to /login</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section id="tech-stack">
+      <h2>Tech Stack</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Framework</td><td><code>Next.js 14</code></td><td>App Router, SSR, API Routes</td></tr>
+            <tr><td>Language</td><td><code>TypeScript</code></td><td>Type-safe development</td></tr>
+            <tr><td>UI</td><td><code>React 18 + Tailwind CSS</code></td><td>Components + styling</td></tr>
+            <tr><td>UI Kit</td><td><code>Radix UI + shadcn/ui</code></td><td>Accessible primitives</td></tr>
+            <tr><td>Database</td><td><code>SQLite (better-sqlite3)</code></td><td>Single-file local DB</td></tr>
+            <tr><td>Auth</td><td><code>bcryptjs + HTTP-only cookies</code></td><td>Session tokens</td></tr>
+            <tr><td>Email</td><td><code>Nodemailer</code></td><td>Password reset OTP</td></tr>
+            <tr><td>Charts</td><td><code>Recharts</code></td><td>Dashboard analytics</td></tr>
+            <tr><td>Images</td><td><code>Sharp</code></td><td>Upload compression</td></tr>
+            <tr><td>Calendar</td><td><code>jalaali-js</code></td><td>Persian (Jalali) dates</td></tr>
+            <tr><td>QR</td><td><code>qrcode.react</code></td><td>Menu QR codes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Roadmap -->
+    <section id="roadmap">
+      <h2>Development Roadmap</h2>
+      <p class="section-desc">فازهای توسعه بر اساس مستندات پروژه و فایل‌های راهنما</p>
+
+      <div class="roadmap">
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 1 — Foundation</div>
+          <div class="roadmap-title">Core Admin & Authentication</div>
+          <p>داشبورد پایه، مدیریت منو، سفارشات، احراز هویت session-based، بازیابی رمز با OTP ایمیل</p>
+          <div class="roadmap-tags">
+            <span class="tag done">MenuContext</span>
+            <span class="tag done">/api/auth/*</span>
+            <span class="tag done">Dashboard tabs</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 2 — Super Admin & Inventory</div>
+          <div class="roadmap-title">Raw Materials & Products</div>
+          <p>نقش super_admin، مدیریت مواد اولیه، لینک مواد به آیتم‌های منو، محاسبه هزینه</p>
+          <div class="roadmap-tags">
+            <span class="tag done">products table</span>
+            <span class="tag done">menu_ingredients</span>
+            <span class="tag done">inventory_logs</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 3 — Customer Separation</div>
+          <div class="roadmap-title">Dual Authentication Systems</div>
+          <p>جداسازی auth ادمین و مشتری — OTP موبایل برای مشتری، کوکی و context مجزا</p>
+          <div class="roadmap-tags">
+            <span class="tag done">CustomerContext</span>
+            <span class="tag done">customer_sessions</span>
+            <span class="tag done">/api/customer/auth/*</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 4 — Unified Products</div>
+          <div class="roadmap-title">Single Source of Truth</div>
+          <p>ادغام raw_materials و products در یک جدول واحد، رفع تداخل دو دیتابیس</p>
+          <div class="roadmap-tags">
+            <span class="tag done">productsService</span>
+            <span class="tag done">IngredientModal</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 5 — UX & Content</div>
+          <div class="roadmap-title">Public Site & Content Management</div>
+          <p>بنرها، ساعات کاری، گالری، استوری، نظرات تجربه، تم پویا، مرتب‌سازی منو</p>
+          <div class="roadmap-tags">
+            <span class="tag done">Phase 5.4 Menu Reorder</span>
+            <span class="tag done">Stories</span>
+            <span class="tag done">Gallery</span>
+            <span class="tag done">Theme system</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item done">
+          <div class="roadmap-phase">Phase 6 — Business Intelligence</div>
+          <div class="roadmap-title">Reports, Loyalty & Staff</div>
+          <p>گزارش فروش/موجودی، برنامه وفاداری، مدیریت پرسنل با دسترسی granular، POS و Kitchen</p>
+          <div class="roadmap-tags">
+            <span class="tag done">/api/reports/*</span>
+            <span class="tag done">loyalty_points</span>
+            <span class="tag done">staff permissions</span>
+            <span class="tag done">POS + Kitchen pages</span>
+          </div>
+        </div>
+
+        <div class="roadmap-item active">
+          <div class="roadmap-phase">Phase 7 — Polish & Deploy</div>
+          <div class="roadmap-title">Production Hardening</div>
+          <p>بهینه‌سازی UI، Firebase hosting config، رفع باگ‌های theme/CSS، تست end-to-end</p>
+          <div class="roadmap-tags">
+            <span class="tag">firebase.json</span>
+            <span class="tag">StoryAvatar circles</span>
+            <span class="tag">Theme radius fix</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features">
+      <h2>Feature Modules</h2>
+      <p class="section-desc">تمام ماژول‌های فعال در داشبورد ادمین (<code>dashboard/page.tsx</code>)</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Tab</th><th>Description</th><th>Key Files</th><th>Access</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>dashboard</td><td>آمار real-time، نمودارها، بازدید</td><td><code>DashboardStats.tsx</code></td><td>All roles</td></tr>
+            <tr><td>menu</td><td>CRUD منو، آپلود تصویر، drag-reorder</td><td><code>useMenuItems</code>, <code>/api/menu</code></td><td>Admin+</td></tr>
+            <tr><td>orders</td><td>مدیریت سفارشات، فیلتر، bulk actions</td><td><code>OrdersTable.tsx</code></td><td>Admin+</td></tr>
+            <tr><td>inventory</td><td>موجودی، محصولات، هشدار کمبود</td><td><code>productsService.ts</code></td><td>Super Admin</td></tr>
+            <tr><td>customer-orders</td><td>سفارشات آنلاین مشتریان</td><td><code>/api/customer/orders</code></td><td>Admin+</td></tr>
+            <tr><td>branches</td><td>مدیریت شعب</td><td><code>/api/branches</code></td><td>Super Admin</td></tr>
+            <tr><td>customers</td><td>لیست و پروفایل مشتریان</td><td><code>/api/customers</code></td><td>Super Admin</td></tr>
+            <tr><td>settings</td><td>تنظیمات سایت، لوگو، تم CSS</td><td><code>SiteSettings.tsx</code></td><td>Super Admin</td></tr>
+            <tr><td>banners</td><td>بنرهای صفحه اصلی</td><td><code>/api/banners</code></td><td>Super Admin</td></tr>
+            <tr><td>working-hours</td><td>ساعات کاری + بستن موقت سایت</td><td><code>/api/working-hours</code></td><td>Super Admin</td></tr>
+            <tr><td>expenses</td><td>مدیریت هزینه‌ها</td><td><code>/api/expenses</code></td><td>Admin+</td></tr>
+            <tr><td>ratings</td><td>امتیازدهی و نظرات</td><td><code>/api/ratings</code></td><td>Admin+</td></tr>
+            <tr><td>customer-messages</td><td>پیام‌های مشتریان</td><td><code>/api/customer-messages</code></td><td>Admin+</td></tr>
+            <tr><td>staff</td><td>مدیریت پرسنل و دسترسی‌ها</td><td><code>/api/staff</code></td><td>Super Admin</td></tr>
+            <tr><td>stats</td><td>آمار پیشرفته</td><td><code>/api/stats</code>, <code>/api/analytics</code></td><td>Super Admin</td></tr>
+            <tr><td>reports</td><td>گزارش فروش، موجودی، پرسنل</td><td><code>/api/reports/*</code></td><td>Admin+</td></tr>
+            <tr><td>waste</td><td>ثبت ضایعات</td><td><code>/api/waste</code></td><td>Admin+</td></tr>
+            <tr><td>gallery</td><td>گالری عکس</td><td><code>/api/gallery</code></td><td>Admin+</td></tr>
+            <tr><td>stories</td><td>استوری اینستاگرامی</td><td><code>StoryManager.tsx</code></td><td>Admin+</td></tr>
+            <tr><td>experience-comments</td><td>نظرات تجربه مشتری</td><td><code>/api/experience-comments</code></td><td>Admin+</td></tr>
+            <tr><td>loyalty</td><td>برنامه وفاداری و امتیاز</td><td><code>/api/loyalty/*</code></td><td>Admin+</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Customer Flow -->
+    <section id="flow-customer">
+      <h2>Customer Flow</h2>
+      <p class="section-desc">مسیر کاربر عادی از ورود به سایت تا ثبت سفارش</p>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-body">
+            <strong>Visit Homepage</strong>
+            <span>کاربر وارد <code>/</code> می‌شود — بنرها، استوری‌ها، نظرات و hero section نمایش داده می‌شود</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-body">
+            <strong>Browse Stories & Menu</strong>
+            <span>کلیک روی StoryAvatar → StoryViewer | رفتن به <code>/menu</code> → دریافت آیتم‌ها از <code>GET /api/menu</code></span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-body">
+            <strong>Customer Login (Optional)</strong>
+            <span><code>/customer/login</code> → شماره موبایل → OTP → <code>customer_auth_token</code> cookie → CustomerContext</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">4</div>
+          <div class="flow-body">
+            <strong>Place Order</strong>
+            <span>انتخاب آیتم‌ها → <code>POST /api/orders</code> → ثبت در orders + order_items + order_status_history</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">5</div>
+          <div class="flow-body">
+            <strong>Profile & Loyalty</strong>
+            <span><code>/profile</code> → <code>/api/customer/profile</code> | امتیاز وفاداری از <code>/api/loyalty/balance</code></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Flow -->
+    <section id="flow-admin">
+      <h2>Admin Flow</h2>
+      <p class="section-desc">مسیر مدیر از login تا مدیریت کامل کافه</p>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-body">
+            <strong>Login</strong>
+            <span><code>/login</code> → <code>POST /api/auth/login</code> → bcrypt verify → session in DB → <code>auth_token</code> cookie (5h)</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-body">
+            <strong>Auth Guard</strong>
+            <span>middleware.ts checks cookie → MenuContext validates via <code>GET /api/auth/validate</code> → sessionStorage <code>vaje_auth</code></span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-body">
+            <strong>Dashboard Access</strong>
+            <span><code>/dashboard</code> → role-based tabs (admin vs super_admin vs staff) → render tab content</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">4</div>
+          <div class="flow-body">
+            <strong>Manage Operations</strong>
+            <span>منو، سفارشات، موجودی، گزارش‌ها — هر tab component/API مخصوص خود را دارد</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">5</div>
+          <div class="flow-body">
+            <strong>Logout</strong>
+            <span><code>POST /api/auth/logout</code> → clear session + cookie + sessionStorage → redirect <code>/login</code></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Staff Flow -->
+    <section id="flow-staff">
+      <h2>Staff Flow</h2>
+      <p class="section-desc">پرسنل با دسترسی محدود و قابل تنظیم per-user</p>
+
+      <div class="flow-h">
+        <div class="flow-h-box"><code>/staff/login</code></div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">staff_sessions</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box"><code>/staff/panel</code></div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box highlight">Tab permissions<br><small>from DB</small></div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">Kitchen / Orders</div>
+      </div>
+
+      <p>دسترسی tabs از جداول <code>staff_role_permissions</code> و <code>staff_tab_permissions</code> خوانده می‌شود.
+      Super Admin می‌تواند برای هر پرسنل tab‌های مجاز را تعریف کند.</p>
+    </section>
+
+    <!-- Order Flow -->
+    <section id="flow-order">
+      <h2>Order Lifecycle</h2>
+      <p class="section-desc">چرخه عمر یک سفارش از ثبت تا تکمیل</p>
+
+      <div class="flow-h">
+        <div class="flow-h-box highlight">pending</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">preparing</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">ready</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box highlight">completed</div>
+      </div>
+      <div class="flow-h" style="margin-top:0.5rem">
+        <div class="flow-h-box" style="opacity:0.6">cancelled</div>
+      </div>
+
+      <h3>Order Sources</h3>
+      <div class="card-grid">
+        <div class="card">
+          <h4>🌐 Website</h4>
+          <p>مشتری از منوی آنلاین سفارش می‌دهد — <code>source: "website"</code></p>
+        </div>
+        <div class="card">
+          <h4>✋ Manual</h4>
+          <p>ادمین از داشبورد سفارش دستی ثبت می‌کند — ManualOrderForm</p>
+        </div>
+        <div class="card">
+          <h4>🏪 POS</h4>
+          <p>صندوق فروش — <code>/dashboard/pos</code></p>
+        </div>
+      </div>
+
+      <p style="margin-top:1rem">هر تغییر وضعیت در <code>order_status_history</code> ثبت می‌شود (timeline کامل).</p>
+    </section>
+
+    <!-- Auth Flow -->
+    <section id="flow-auth">
+      <h2>Authentication Systems</h2>
+      <p class="section-desc">سه سیستم auth کاملاً جدا — هر کدام cookie، context و API مجزا</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>System</th><th>Login Route</th><th>Cookie</th><th>Context</th><th>Duration</th><th>Method</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Admin</strong></td>
+              <td><code>/login</code></td>
+              <td><code>auth_token</code></td>
+              <td>MenuContext</td>
+              <td>5 hours</td>
+              <td>Email + Password</td>
+            </tr>
+            <tr>
+              <td><strong>Customer</strong></td>
+              <td><code>/customer/login</code></td>
+              <td><code>customer_auth_token</code></td>
+              <td>CustomerContext</td>
+              <td>30 days</td>
+              <td>Phone + OTP</td>
+            </tr>
+            <tr>
+              <td><strong>Staff</strong></td>
+              <td><code>/staff/login</code></td>
+              <td><code>staff_auth_token</code></td>
+              <td>sessionStorage</td>
+              <td>Configurable</td>
+              <td>Email + Password</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Admin Session on Page Reload</h3>
+      <div class="flow-h">
+        <div class="flow-h-box">Page reload</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">MenuContext mount</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">Check sessionStorage</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box highlight">GET /api/auth/validate</div>
+        <span class="flow-h-arrow">→</span>
+        <div class="flow-h-box">Restore session</div>
+      </div>
+    </section>
+
+    <!-- Routes -->
+    <section id="routes">
+      <h2>Pages & Routes</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Route</th><th>Group</th><th>Description</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>/</code></td><td>(user)</td><td>صفحه اصلی — hero, stories, reviews</td></tr>
+            <tr><td><code>/menu</code></td><td>(user)</td><td>منوی دیجیتال + سفارش</td></tr>
+            <tr><td><code>/gallery</code></td><td>(user)</td><td>گالری عکس</td></tr>
+            <tr><td><code>/experience</code></td><td>(user)</td><td>نظرات تجربه</td></tr>
+            <tr><td><code>/profile</code></td><td>(user)</td><td>پروفایل مشتری</td></tr>
+            <tr><td><code>/login</code></td><td>(auth)</td><td>ورود ادمین</td></tr>
+            <tr><td><code>/forgot-password</code></td><td>(auth)</td><td>بازیابی رمز</td></tr>
+            <tr><td><code>/dashboard</code></td><td>(admin)</td><td>داشبورد اصلی (multi-tab SPA)</td></tr>
+            <tr><td><code>/dashboard/pos</code></td><td>(admin)</td><td>صندوق فروش</td></tr>
+            <tr><td><code>/dashboard/kitchen</code></td><td>(admin)</td><td>صفحه آشپزخانه</td></tr>
+            <tr><td><code>/customer/login</code></td><td>customer</td><td>ورود OTP مشتری</td></tr>
+            <tr><td><code>/staff/login</code></td><td>staff</td><td>ورود پرسنل</td></tr>
+            <tr><td><code>/staff/panel</code></td><td>staff</td><td>پنل پرسنل</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- API -->
+    <section id="api">
+      <h2>API Endpoints</h2>
+      <p class="section-desc">بیش از ۱۰۰ route در <code>src/app/api/</code> — دسته‌بندی بر اساس domain</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>🔐 Auth</h4>
+          <p><code>/api/auth/login</code><br><code>/api/auth/validate</code><br><code>/api/auth/logout</code><br><code>/api/auth/reset-password</code></p>
+        </div>
+        <div class="card">
+          <h4>👤 Customer</h4>
+          <p><code>/api/customer/auth/*</code><br><code>/api/customer/profile</code><br><code>/api/customer/orders</code></p>
+        </div>
+        <div class="card">
+          <h4>🍽 Menu</h4>
+          <p><code>/api/menu</code><br><code>/api/menu/[id]</code><br><code>/api/menu/reorder</code><br><code>/api/categories</code></p>
+        </div>
+        <div class="card">
+          <h4>📦 Orders</h4>
+          <p><code>/api/orders</code><br><code>/api/orders/[id]</code><br><code>/api/orders/[id]/history</code></p>
+        </div>
+        <div class="card">
+          <h4>📊 Analytics</h4>
+          <p><code>/api/stats</code><br><code>/api/analytics</code><br><code>/api/reports/*</code></p>
+        </div>
+        <div class="card">
+          <h4>🏪 Inventory</h4>
+          <p><code>/api/products</code><br><code>/api/inventory/*</code><br><code>/api/waste</code></p>
+        </div>
+        <div class="card">
+          <h4>⚙️ Settings</h4>
+          <p><code>/api/settings</code><br><code>/api/settings/public</code><br><code>/api/theme</code><br><code>/api/working-hours</code></p>
+        </div>
+        <div class="card">
+          <h4>📸 Content</h4>
+          <p><code>/api/banners</code><br><code>/api/gallery/*</code><br><code>/api/stories</code><br><code>/api/experience-comments</code></p>
+        </div>
+        <div class="card">
+          <h4>⭐ Loyalty</h4>
+          <p><code>/api/loyalty/points</code><br><code>/api/loyalty/balance</code><br><code>/api/loyalty/rewards</code><br><code>/api/loyalty/redeem</code></p>
+        </div>
+        <div class="card">
+          <h4>👨‍💼 Staff</h4>
+          <p><code>/api/staff</code><br><code>/api/staff/auth/*</code><br><code>/api/staff/permissions</code><br><code>/api/staff/orders</code></p>
+        </div>
+      </div>
+
+      <h3>API Auth Pattern (Dashboard)</h3>
+      <p>تمام APIهای محافظت‌شده از <code>ensureAdmin(request)</code> در <code>src/lib/auth.ts</code> استفاده می‌کنند:</p>
+      <div class="file-tree">
+<span class="comment">// src/lib/auth.ts pattern</span>
+export function ensureAdmin(request: NextRequest) {
+  const token = request.headers.get("x-access-token")
+             || request.cookies.get("auth_token")?.value;
+  if (!token || !validateSession(token)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null; <span class="comment">// null = authorized</span>
+}
+      </div>
+    </section>
+
+    <!-- Database -->
+    <section id="database">
+      <h2>Database Schema</h2>
+      <p class="section-desc">SQLite — <code>data/vaje-cafe.db</code> — تمام جداول در <code>src/lib/database.ts</code> initialize می‌شوند</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Table</th><th>Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>menu_items</code></td><td>آیتم‌های منو + display_order</td></tr>
+            <tr><td><code>orders</code> + <code>order_items</code></td><td>سفارشات و جزئیات</td></tr>
+            <tr><td><code>order_status_history</code></td><td>تاریخچه وضعیت سفارش</td></tr>
+            <tr><td><code>customers</code></td><td>پروفایل مشتریان</td></tr>
+            <tr><td><code>customer_otp</code> + <code>customer_sessions</code></td><td>OTP و session مشتری</td></tr>
+            <tr><td><code>products</code></td><td>مواد اولیه و محصولات بسته‌ای (unified)</td></tr>
+            <tr><td><code>menu_ingredients</code></td><td>لینک مواد به آیتم منو</td></tr>
+            <tr><td><code>inventory_logs</code></td><td>لاگ تغییرات موجودی</td></tr>
+            <tr><td><code>admin_users</code> + <code>sessions</code></td><td>ادمین و session</td></tr>
+            <tr><td><code>staff</code> + <code>staff_sessions</code></td><td>پرسنل و session</td></tr>
+            <tr><td><code>staff_tab_permissions</code></td><td>دسترسی tab per staff</td></tr>
+            <tr><td><code>site_settings</code></td><td>تنظیمات key-value سایت</td></tr>
+            <tr><td><code>banners</code></td><td>بنرهای صفحه اصلی</td></tr>
+            <tr><td><code>working_hours</code> + <code>site_status</code></td><td>ساعات کاری و بستن موقت</td></tr>
+            <tr><td><code>statistics</code></td><td>آمار بازدید و فروش</td></tr>
+            <tr><td><code>expenses</code></td><td>هزینه‌های عملیاتی</td></tr>
+            <tr><td><code>ratings</code> + <code>staff_ratings</code></td><td>امتیازات</td></tr>
+            <tr><td><code>customer_messages</code></td><td>پیام‌های مشتری</td></tr>
+            <tr><td><code>branches</code></td><td>شعب کافه</td></tr>
+            <tr><td><code>photo_galleries</code> + <code>photos</code></td><td>گالری</td></tr>
+            <tr><td><code>stories</code></td><td>استوری‌های اینستاگرامی</td></tr>
+            <tr><td><code>experience_comments</code></td><td>نظرات تجربه</td></tr>
+            <tr><td><code>loyalty_points</code> + <code>loyalty_rewards</code></td><td>برنامه وفاداری</td></tr>
+            <tr><td><code>waste_records</code></td><td>ضایعات</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Roles -->
+    <section id="roles">
+      <h2>Roles & Permissions</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Role</th><th>Tabs Access</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>super_admin</code></td>
+              <td>All 22 tabs</td>
+              <td>دسترسی کامل — inventory, branches, staff, settings</td>
+            </tr>
+            <tr>
+              <td><code>admin</code></td>
+              <td>15 tabs</td>
+              <td>بدون inventory, branches, customers, settings, banners, working-hours, staff, stats</td>
+            </tr>
+            <tr>
+              <td><code>staff</code></td>
+              <td>Custom per user</td>
+              <td>از DB — staff_tab_permissions</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- File Structure -->
+    <section id="files">
+      <h2>File Structure</h2>
+      <div class="file-tree">
+<span class="dir">vaje-cafe/</span>
+├── <span class="dir">src/</span>
+│   ├── <span class="dir">app/</span>
+│   │   ├── <span class="dir">(admin)/</span>          <span class="comment"># Protected dashboard, POS, kitchen</span>
+│   │   ├── <span class="dir">(auth)/</span>           <span class="comment"># Login, forgot-password</span>
+│   │   ├── <span class="dir">(user)/</span>           <span class="comment"># Public: home, menu, gallery, experience</span>
+│   │   ├── <span class="dir">api/</span>              <span class="comment"># 100+ REST endpoints</span>
+│   │   ├── <span class="file">layout.tsx</span>          <span class="comment"># Root layout + providers</span>
+│   │   ├── <span class="file">providers.tsx</span>       <span class="comment"># MenuProvider, ThemeProvider</span>
+│   │   └── <span class="file">globals.css</span>         <span class="comment"># CSS variables + theme tokens</span>
+│   ├── <span class="dir">components/</span>
+│   │   ├── <span class="dir">stories/</span>          <span class="comment"># StoryAvatar, StoryViewer, StoryManager</span>
+│   │   ├── <span class="dir">settings/</span>         <span class="comment"># SiteSettings (theme, logo, content)</span>
+│   │   ├── <span class="file">Navbar.tsx</span>
+│   │   └── <span class="file">Footer.tsx</span>
+│   ├── <span class="dir">context/</span>
+│   │   ├── <span class="file">MenuContext.tsx</span>     <span class="comment"># Admin auth + menu state</span>
+│   │   ├── <span class="file">CustomerContext.tsx</span> <span class="comment"># Customer OTP auth</span>
+│   │   └── <span class="file">ThemeContext.tsx</span>    <span class="comment"># Dark/light + theme config</span>
+│   ├── <span class="dir">lib/</span>
+│   │   ├── <span class="file">database.ts</span>         <span class="comment"># Schema init (30+ tables)</span>
+│   │   ├── <span class="file">auth.ts</span>             <span class="comment"># ensureAdmin middleware</span>
+│   │   ├── <span class="file">authService.ts</span>      <span class="comment"># Login, sessions, OTP</span>
+│   │   ├── <span class="file">themeService.ts</span>     <span class="comment"># Dynamic CSS variables</span>
+│   │   └── <span class="file">imageService.ts</span>     <span class="comment"># Sharp compression</span>
+│   ├── <span class="dir">services/</span>
+│   │   └── <span class="file">productsService.ts</span>  <span class="comment"># Unified inventory</span>
+│   └── <span class="dir">utils/</span>                <span class="comment"># Jalali dates, formatting</span>
+├── <span class="dir">scripts/</span>                  <span class="comment"># create_admin, init_databases, migrations</span>
+├── <span class="dir">data/</span>                     <span class="comment"># vaje-cafe.db</span>
+├── <span class="file">middleware.ts</span>             <span class="comment"># Route protection</span>
+├── <span class="file">tailwind.config.js</span>
+└── <span class="file">DOCUMENTATION.md</span>          <span class="comment"># Markdown reference docs</span>
+      </div>
+    </section>
+
+    <!-- Related Docs -->
+    <section id="related-docs">
+      <h2>Related Documentation Files</h2>
+      <p class="section-desc">فایل‌های markdown موجود در ریشه پروژه</p>
+
+      <ul class="docs-list">
+        <li>
+          <span class="doc-icon">📖</span>
+          <div>
+            <strong>DOCUMENTATION.md</strong>
+            <span>مستندات کامل — auth, API, schema, deployment, troubleshooting</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🚀</span>
+          <div>
+            <strong>SETUP_COMPLETE.md</strong>
+            <span>راه‌اندازی اولیه، super admin، verify database</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">👑</span>
+          <div>
+            <strong>SUPER_ADMIN_QUICK_START.md</strong>
+            <span>راهنمای super admin و raw materials</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">📦</span>
+          <div>
+            <strong>UNIFIED_PRODUCTS_ARCHITECTURE.md</strong>
+            <span>معماری یکپارچه products و menu_ingredients</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🔐</span>
+          <div>
+            <strong>CUSTOMER_ADMIN_SEPARATION.md</strong>
+            <span>جداسازی auth مشتری و ادمین</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🗄</span>
+          <div>
+            <strong>DATABASE_SETUP.md</strong>
+            <span>راه‌اندازی و ساختار دیتابیس</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🧪</span>
+          <div>
+            <strong>TESTING_PHASE_5.4.md</strong>
+            <span>تست drag-and-drop مرتب‌سازی منو</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🌿</span>
+          <div>
+            <strong>RAW_MATERIALS_GUIDE.md</strong>
+            <span>API و راهنمای مواد اولیه</span>
+          </div>
+        </li>
+        <li>
+          <span class="doc-icon">🔧</span>
+          <div>
+            <strong>scripts/README.md</strong>
+            <span>اسکریپت‌های create_admin, init_databases, migrations</span>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Getting Started -->
+    <section id="getting-started">
+      <h2>Getting Started</h2>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-body">
+            <strong>Install & Configure</strong>
+            <span><code>npm install</code> → copy <code>.env.example</code> to <code>.env.local</code> → configure SMTP</span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-body">
+            <strong>Initialize Database</strong>
+            <span><code>node scripts/init_databases.js</code> → <code>node scripts/create_super_admin.js</code></span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-body">
+            <strong>Start Dev Server</strong>
+            <span><code>npm run dev</code> → open <code>http://localhost:3002</code></span>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num">4</div>
+          <div class="flow-body">
+            <strong>Login & Explore</strong>
+            <span>Admin: <code>/login</code> | Public site: <code>/</code> | Menu: <code>/menu</code> | Dashboard: <code>/dashboard</code></span>
+          </div>
+        </div>
+      </div>
+
+      <h3>Default Credentials</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Role</th><th>Email</th><th>Password</th><th>URL</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Super Admin</td>
+              <td><code>superadmin@vaje-cafe.com</code></td>
+              <td><code>SuperAdmin123</code></td>
+              <td><code>/login</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      <p>Vaje Cafe System Documentation — Generated June 2026</p>
+      <p style="margin-top:0.5rem">Open this file in any browser: <code>docs/VAJE_CAFE_DOCUMENTATION.html</code></p>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>

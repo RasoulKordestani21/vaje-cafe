@@ -1,43 +1,36 @@
 "use client";
 
-import { db } from "../lib/firebase";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  orderBy,
-  onSnapshot,
-  increment,
-  setDoc,
-  getDoc
-} from "firebase/firestore";
-import { MenuItem, Order, OrderItem } from "../types";
+import { MenuItem, Order, OrderItem } from "@/types";
 
 /**
- * DB SERVICE LAYER
- * This file acts as the repository. If you migrate to SQLite or Postgres later,
- * you only need to rewrite the functions in this file to query your new DB.
- * The rest of the React application will remain unchanged.
+ * Local API-based DB service.
+ * Replaces the previous Firebase implementation and talks to the
+ * Next.js API routes backed by SQLite (or any server DB you choose).
  */
 
-const MENU_COLLECTION = "menu_items";
-const ORDERS_COLLECTION = "orders";
-const STATS_COLLECTION = "stats";
-const STATS_DOC_ID = "general";
+const API_BASE = "/api";
+
+// Get the admin token from environment (available in client-side Next.js apps as NEXT_PUBLIC_*)
+const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
+
+// Helper function to get headers with authentication
+export const getAuthHeaders = (): HeadersInit => {
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem("vaje_admin_token") || ADMIN_TOKEN : ADMIN_TOKEN;
+  if (token) {
+    return {
+      "x-access-token": token
+    };
+  }
+  return {};
+};
 
 // --- MENU OPERATIONS ---
 
 export const getMenuItems = async (): Promise<MenuItem[]> => {
   try {
-    const q = query(collection(db, MENU_COLLECTION));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(
-      doc => ({ id: doc.id, ...doc.data() } as MenuItem)
-    );
+    const res = await fetch(`${API_BASE}/menu`);
+    if (!res.ok) return [];
+    return (await res.json()) as MenuItem[];
   } catch (error) {
     console.error("Error fetching menu:", error);
     return [];
@@ -45,13 +38,27 @@ export const getMenuItems = async (): Promise<MenuItem[]> => {
 };
 
 export const subscribeToMenu = (callback: (items: MenuItem[]) => void) => {
-  const q = query(collection(db, MENU_COLLECTION));
-  return onSnapshot(q, snapshot => {
-    const items = snapshot.docs.map(
-      doc => ({ id: doc.id, ...doc.data() } as MenuItem)
-    );
-    callback(items);
-  });
+  // Simple polling fallback for reactivity (poll every 3s).
+  let mounted = true;
+
+  const fetchAndCallback = async () => {
+    try {
+      const items = await getMenuItems();
+      if (mounted) callback(items);
+    } catch (e) {
+      console.error("subscribeToMenu error:", e);
+    }
+  };
+
+  // Initial fetch
+  fetchAndCallback();
+  const id = setInterval(fetchAndCallback, 3000);
+
+  // Return unsubscribe function
+  return () => {
+    mounted = false;
+    clearInterval(id as unknown as number);
+  };
 };
 
 export const addMenuItemToDB = async (
@@ -59,13 +66,24 @@ export const addMenuItemToDB = async (
   imageFile?: File
 ): Promise<void> => {
   try {
-    let imageUrl = item.imageUrl;
+    const form = new FormData();
+    form.append("name", item.name);
+    form.append("description", item.description || "");
+    form.append("price", String(item.price));
+    form.append("category", item.category);
+    form.append("available", item.available ? "true" : "false");
+    if (imageFile) form.append("image", imageFile);
 
-    if (imageFile) {
-      imageUrl = await uploadImage(imageFile, "menu-images");
+    const res = await fetch(`${API_BASE}/menu`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: form
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to add menu item");
     }
-
-    await addDoc(collection(db, MENU_COLLECTION), { ...item, imageUrl });
   } catch (error) {
     console.error("Error adding item:", error);
     throw error;
@@ -78,24 +96,69 @@ export const updateMenuItemInDB = async (
   imageFile?: File
 ): Promise<void> => {
   try {
-    const docRef = doc(db, MENU_COLLECTION, id);
-    let finalUpdates = { ...updates };
+    const form = new FormData();
+    if (updates.name) form.append("name", updates.name);
+    if (updates.description) form.append("description", updates.description);
+    if (typeof updates.price === "number")
+      form.append("price", String(updates.price));
+    if (updates.category) form.append("category", updates.category);
+    if (typeof updates.available === "boolean")
+      form.append("available", updates.available ? "true" : "false");
+    if (typeof updates.is_pinned === "boolean")
+      form.append("is_pinned", updates.is_pinned ? "true" : "false");
+    if (typeof updates.is_suggested === "boolean")
+      form.append("is_suggested", updates.is_suggested ? "true" : "false");
+    if (imageFile) form.append("image", imageFile);
 
-    if (imageFile) {
-      const url = await uploadImage(imageFile, "menu-images");
-      finalUpdates.imageUrl = url;
+    const res = await fetch(`${API_BASE}/menu/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: form
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to update menu item");
     }
-
-    await updateDoc(docRef, finalUpdates);
   } catch (error) {
     console.error("Error updating item:", error);
     throw error;
   }
 };
 
+export const reorderMenuItems = async (
+  itemOrders: Array<{ id: string; display_order: number }>
+): Promise<void> => {
+  try {
+    const res = await fetch(`${API_BASE}/menu/reorder`, {
+      method: "PUT",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ itemOrders: itemOrders })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to reorder menu items");
+    }
+  } catch (error) {
+    console.error("Error reordering items:", error);
+    throw error;
+  }
+};
+
 export const deleteMenuItemFromDB = async (id: string): Promise<void> => {
   try {
-    await deleteDoc(doc(db, MENU_COLLECTION, id));
+    const res = await fetch(`${API_BASE}/menu/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete menu item");
+    }
   } catch (error) {
     console.error("Error deleting item:", error);
     throw error;
@@ -105,40 +168,56 @@ export const deleteMenuItemFromDB = async (id: string): Promise<void> => {
 // --- ORDER OPERATIONS ---
 
 export const subscribeToOrders = (callback: (orders: Order[]) => void) => {
-  const q = query(
-    collection(db, ORDERS_COLLECTION),
-    orderBy("createdAt", "desc")
-  );
-  return onSnapshot(q, snapshot => {
-    const orders = snapshot.docs.map(
-      doc => ({ id: doc.id, ...doc.data() } as Order)
-    );
-    callback(orders);
-  });
+  let mounted = true;
+
+  const fetchAndCallback = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/orders`);
+      if (!res.ok) return;
+      const orders = (await res.json()) as Order[];
+      if (mounted) callback(orders);
+    } catch (e) {
+      console.error("subscribeToOrders error:", e);
+    }
+  };
+
+  fetchAndCallback();
+  const id = setInterval(fetchAndCallback, 3000);
+
+  return () => {
+    mounted = false;
+    clearInterval(id as unknown as number);
+  };
 };
 
 export const createOrderInDB = async (
   items: OrderItem[],
-  note?: string
+  note?: string,
+  customerInfo?: {
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    tableNumber?: number | string;
+  }
 ): Promise<void> => {
   try {
-    const totalAmount = items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    const order: Omit<Order, "id"> = {
-      items,
-      totalAmount,
-      status: "pending",
-      createdAt: Date.now(),
-      customerNote: note
-    };
+    const res = await fetch(`${API_BASE}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items,
+        note,
+        customerName: customerInfo?.customerName,
+        customerPhone: customerInfo?.customerPhone,
+        customerEmail: customerInfo?.customerEmail,
+        tableNumber: customerInfo?.tableNumber
+      })
+    });
 
-    await addDoc(collection(db, ORDERS_COLLECTION), order);
-
-    // Update Sales Stats
-    await updateStats("totalSales", totalAmount);
-    await updateStats("ordersCount", 1);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to create order");
+    }
   } catch (error) {
     console.error("Error creating order:", error);
     throw error;
@@ -150,8 +229,19 @@ export const updateOrderStatusInDB = async (
   status: Order["status"]
 ): Promise<void> => {
   try {
-    const docRef = doc(db, ORDERS_COLLECTION, id);
-    await updateDoc(docRef, { status });
+    const res = await fetch(`${API_BASE}/orders/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+      },
+      body: JSON.stringify({ status })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to update order status");
+    }
   } catch (error) {
     console.error("Error updating order status:", error);
     throw error;
@@ -162,38 +252,23 @@ export const updateOrderStatusInDB = async (
 
 export const incrementVisitCount = async () => {
   try {
-    await updateStats("visits", 1);
+    await fetch(`${API_BASE}/stats`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "visit" })
+    });
   } catch (e) {
     console.error("Failed to track visit", e);
   }
 };
 
-// Helper to update global stats safely
-const updateStats = async (field: string, value: number) => {
-  const statsRef = doc(db, STATS_COLLECTION, STATS_DOC_ID);
-  const docSnap = await getDoc(statsRef);
-
-  if (!docSnap.exists()) {
-    // Create if doesn't exist
-    await setDoc(statsRef, {
-      visits: 0,
-      totalSales: 0,
-      ordersCount: 0,
-      [field]: value
-    });
-  } else {
-    // Atomically increment
-    await updateDoc(statsRef, {
-      [field]: increment(value)
-    });
-  }
-};
-
 export const getStats = async () => {
-  const statsRef = doc(db, STATS_COLLECTION, STATS_DOC_ID);
-  const docSnap = await getDoc(statsRef);
-  if (docSnap.exists()) {
-    return docSnap.data();
+  try {
+    const res = await fetch(`${API_BASE}/stats`);
+    if (!res.ok) return { visits: 0, totalSales: 0, ordersCount: 0 };
+    return await res.json();
+  } catch (e) {
+    console.error("Failed to get stats", e);
+    return { visits: 0, totalSales: 0, ordersCount: 0 };
   }
-  return { visits: 0, totalSales: 0, ordersCount: 0 };
 };
