@@ -4,7 +4,13 @@ import React from "react";
 import { Search } from "lucide-react";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -50,15 +56,12 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
             className={isDark ? "text-gray-400" : "text-gray-600"}
           />
           <h3
-            className={cn(
-              "font-bold",
-              isDark ? "text-white" : "text-gray-900"
-            )}
+            className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}
           >
             جستجوی پیشرفته
           </h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-1 gap-4">
           <div>
             <label
               className={cn(
@@ -131,13 +134,15 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
       {/* Basic Filters (source, status, dates, reset) */}
       <div
         className={cn(
-          "p-4 rounded-2xl border flex flex-col sm:flex-row gap-4 flex-wrap items-end",
+          "p-4 rounded-2xl border flex flex-row sm:flex-col gap-4 flex-wrap items-end",
           isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
         )}
       >
         <Select
           value={value.source || "all"}
-          onValueChange={val => handleChange({ source: val as OrderFilterState["source"] })}
+          onValueChange={val =>
+            handleChange({ source: val as OrderFilterState["source"] })
+          }
         >
           <SelectTrigger
             className={cn(
@@ -149,7 +154,11 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
           >
             <SelectValue placeholder="همه منابع" />
           </SelectTrigger>
-          <SelectContent className={cn(isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900")}>
+          <SelectContent
+            className={cn(
+              isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900"
+            )}
+          >
             <SelectItem value="all">همه منابع</SelectItem>
             <SelectItem value="website">وب‌سایت</SelectItem>
             <SelectItem value="manual">دستی</SelectItem>
@@ -158,7 +167,9 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
 
         <Select
           value={value.status || "all"}
-          onValueChange={val => handleChange({ status: val as OrderFilterState["status"] })}
+          onValueChange={val =>
+            handleChange({ status: val as OrderFilterState["status"] })
+          }
         >
           <SelectTrigger
             className={cn(
@@ -170,7 +181,11 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
           >
             <SelectValue placeholder="همه وضعیت‌ها" />
           </SelectTrigger>
-          <SelectContent className={cn(isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900")}>
+          <SelectContent
+            className={cn(
+              isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900"
+            )}
+          >
             <SelectItem value="all">همه وضعیت‌ها</SelectItem>
             <SelectItem value="pending">درحال انتظار</SelectItem>
             <SelectItem value="completed">تکمیل شده</SelectItem>

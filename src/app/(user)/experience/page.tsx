@@ -6,8 +6,6 @@ import { cn } from "@/lib/utils";
 import { formatJalaliDate } from "@/utils/jalaliDateUtils";
 import { timestampToJalali } from "@/utils/jalaliDateUtils";
 import ExperienceComments from "@/components/experience/ExperienceComments";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 interface ExperienceComment {
   id: string;
@@ -64,7 +62,6 @@ export default function ExperiencePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-neutral-950 to-neutral-900" dir="rtl">
-      <Navbar />
       {/* Hero Section */}
       <section className="relative py-24 px-4">
         <div className="max-w-7xl mx-auto text-center">
@@ -203,8 +200,6 @@ export default function ExperiencePage() {
           )}
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 }

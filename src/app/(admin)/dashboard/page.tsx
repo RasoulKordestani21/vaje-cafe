@@ -34,9 +34,7 @@ import OrderDetailModal from "@/components/OrderDetailModal";
 import StockAdjustmentModal from "@/components/StockAdjustmentModal";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { getStats } from "@/services/dbService";
-import {
-  formatPersianNumber
-} from "@/utils/dateFormatter";
+import { formatPersianNumber } from "@/utils/dateFormatter";
 import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
 import {
   filterOrders,
@@ -73,7 +71,9 @@ import LoyaltyProgramManager from "@/components/loyalty/LoyaltyProgramManager";
 import LoyaltyPointsManager from "@/components/loyalty/LoyaltyPointsManager";
 import ReportsManager from "@/components/reports/ReportsManager";
 import WasteManager from "@/components/waste/WasteManager";
-import DashboardSidebar, { DashboardPage } from "@/components/dashboard/DashboardSidebar";
+import DashboardSidebar, {
+  DashboardPage
+} from "@/components/dashboard/DashboardSidebar";
 import { cn } from "@/lib/utils";
 
 export default function AdminPage() {
@@ -93,22 +93,23 @@ export default function AdminPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { isDark, toggleTheme } = useContext(ThemeContext);
-  
+
   // Get active page from URL search params, default to "dashboard"
   // Use pathname + search params to ensure component updates on navigation
   const pageParam = searchParams?.get("page") || "dashboard";
   const [activePage, setActivePage] = useState<DashboardPage>(
     (pageParam as DashboardPage) || "dashboard"
   );
-  
+
   // Sync activePage with URL params when they change
   useEffect(() => {
     const newPageParam = searchParams?.get("page") || "dashboard";
     const newActivePage = (newPageParam as DashboardPage) || "dashboard";
     setActivePage(newActivePage);
   }, [pageParam, pathname, searchParams]);
-  
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [accessibleTabs, setAccessibleTabs] = useState<string[]>([]);
   const [userType, setUserType] = useState<"admin" | "staff" | null>(null);
   const [stats, setStats] = useState({
@@ -165,7 +166,9 @@ export default function AdminPage() {
   });
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [showOrderDetail, setShowOrderDetail] = useState(false);
-  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<any | null>(
+    null
+  );
 
   // Customer Orders State
   // Customer Orders state is now handled by CustomerOrders component
@@ -179,24 +182,22 @@ export default function AdminPage() {
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [selectedProductLogs, setSelectedProductLogs] = useState<any[]>([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
-  
+
   // Inventory Enhancement State
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
-  
+
   // Use inventory hook (only when inventory tab is active and user is super_admin)
   // Note: Hook will be called but will only fetch when tab is active
   const inventoryData = useInventory();
-  const {
-    lowStockAlerts,
-    inventoryValue,
-    restockRecommendations,
-    suppliers
-  } = activePage === "inventory" && userRole === "super_admin" ? inventoryData : {
-    lowStockAlerts: [],
-    inventoryValue: null,
-    restockRecommendations: [],
-    suppliers: []
-  };
+  const { lowStockAlerts, inventoryValue, restockRecommendations, suppliers } =
+    activePage === "inventory" && userRole === "super_admin"
+      ? inventoryData
+      : {
+          lowStockAlerts: [],
+          inventoryValue: null,
+          restockRecommendations: [],
+          suppliers: []
+        };
   const [showStockAdjustment, setShowStockAdjustment] = useState(false);
   const [adjustmentProduct, setAdjustmentProduct] = useState<any | null>(null);
 
@@ -211,8 +212,9 @@ export default function AdminPage() {
 
   // Menu Management
   const [showIngredientModal, setShowIngredientModal] = useState(false);
-  const [ingredientModalItemId, setIngredientModalItemId] = useState<string>("");
-  
+  const [ingredientModalItemId, setIngredientModalItemId] =
+    useState<string>("");
+
   const menuItems = useMenuItems({
     items,
     addItem,
@@ -250,11 +252,11 @@ export default function AdminPage() {
         const analyticsUrl = params.toString()
           ? `/api/analytics?${params.toString()}`
           : "/api/analytics";
-        
+
         try {
           const analyticsResponse = await fetch(analyticsUrl);
           const analyticsData = await analyticsResponse.json();
-          
+
           setStats({
             visits: analyticsData.visits || 0,
             menuViews: analyticsData.menuViews || 0,
@@ -264,8 +266,18 @@ export default function AdminPage() {
             dailyData: analyticsData.dailyData || [],
             categoryBreakdown: analyticsData.categoryBreakdown || [],
             comparisonData: analyticsData.comparisonData || {
-              todayVsYesterday: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 },
-              thisWeekVsLastWeek: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 }
+              todayVsYesterday: {
+                orders: 0,
+                sales: 0,
+                ordersChange: 0,
+                salesChange: 0
+              },
+              thisWeekVsLastWeek: {
+                orders: 0,
+                sales: 0,
+                ordersChange: 0,
+                salesChange: 0
+              }
             },
             topSellingItems: analyticsData.topSellingItems || []
           });
@@ -286,8 +298,18 @@ export default function AdminPage() {
             dailyData: data.dailyData || [],
             categoryBreakdown: data.categoryBreakdown || [],
             comparisonData: {
-              todayVsYesterday: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 },
-              thisWeekVsLastWeek: { orders: 0, sales: 0, ordersChange: 0, salesChange: 0 }
+              todayVsYesterday: {
+                orders: 0,
+                sales: 0,
+                ordersChange: 0,
+                salesChange: 0
+              },
+              thisWeekVsLastWeek: {
+                orders: 0,
+                sales: 0,
+                ordersChange: 0,
+                salesChange: 0
+              }
             },
             topSellingItems: []
           });
@@ -474,7 +496,11 @@ export default function AdminPage() {
     }
   };
 
-  const handleStockAdjustment = async (productId: string, newStock: number, note: string) => {
+  const handleStockAdjustment = async (
+    productId: string,
+    newStock: number,
+    note: string
+  ) => {
     try {
       const res = await fetch(`/api/products/${productId}`, {
         method: "PUT",
@@ -591,24 +617,60 @@ export default function AdminPage() {
 
     if (effectiveRole === "super_admin") {
       // Super Admin: Full access to everything
-      return ["dashboard", "menu", "orders", "inventory", "customer-orders", "branches", "customers", "settings", "banners", "working-hours", "expenses", "ratings", "customer-messages", "staff", "stats", "reports", "waste", "gallery", "stories", "experience-comments", "loyalty"];
+      return [
+        "dashboard",
+        "menu",
+        "orders",
+        "inventory",
+        "customer-orders",
+        "branches",
+        "customers",
+        "settings",
+        "banners",
+        "working-hours",
+        "expenses",
+        "ratings",
+        "customer-messages",
+        "staff",
+        "stats",
+        "reports",
+        "waste",
+        "gallery",
+        "stories",
+        "experience-comments",
+        "loyalty"
+      ];
     }
-    
+
     if (effectiveRole === "admin") {
       // Admin: Management tabs (no inventory, branches, staff management)
-      return ["dashboard", "menu", "orders", "customer-orders", "expenses", "ratings", "customer-messages", "reports", "waste", "gallery", "stories", "experience-comments", "loyalty"];
+      return [
+        "dashboard",
+        "menu",
+        "orders",
+        "customer-orders",
+        "expenses",
+        "ratings",
+        "customer-messages",
+        "reports",
+        "waste",
+        "gallery",
+        "stories",
+        "experience-comments",
+        "loyalty"
+      ];
     }
-    
+
     if (userType === "staff") {
       // Staff tabs are fetched from database (can be customized per staff member)
       return accessibleTabs;
     }
-    
+
     // Default fallback: if authenticated but role not loaded yet, show basic tabs
     if (isAuthenticated) {
       return ["dashboard", "menu", "orders"];
     }
-    
+
     return [];
   };
 
@@ -617,26 +679,30 @@ export default function AdminPage() {
     if (typeof window !== "undefined") {
       const userTypeValue = sessionStorage.getItem("vaje_userType");
       setUserType(userTypeValue as "admin" | "staff" | null);
-      
+
       if (userTypeValue === "staff") {
         const staffData = sessionStorage.getItem("staff_data");
         if (staffData) {
           const parsed = JSON.parse(staffData);
-          
+
           // Role-based default tabs (business logic)
           const roleDefaults: { [key: string]: string[] } = {
             waiter: ["orders"],
             barista: ["orders"],
-            manager: ["dashboard", "orders", "stats"],
+            manager: ["dashboard", "orders", "stats"]
           };
-          
+
           // Fetch accessible tabs from database
           fetch(`/api/staff/${parsed.id}/tabs`, {
-            credentials: "include",
+            credentials: "include"
           })
             .then(res => res.json())
             .then(data => {
-              if (data.permissions && Array.isArray(data.permissions) && data.permissions.length > 0) {
+              if (
+                data.permissions &&
+                Array.isArray(data.permissions) &&
+                data.permissions.length > 0
+              ) {
                 setAccessibleTabs(data.permissions);
               } else {
                 // Use role-based defaults
@@ -690,310 +756,345 @@ export default function AdminPage() {
             />
           </div>
         );
-      
+
       case "orders":
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl text-white font-bold">مدیریت سفارشات</h2>
-            <button
-              onClick={() => setShowManualOrderForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
-            >
-              <Plus size={18} />
-              سفارش دستی
-            </button>
-          </div>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl text-white font-bold">مدیریت سفارشات</h2>
+              <button
+                onClick={() => setShowManualOrderForm(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
+              >
+                <Plus size={18} />
+                سفارش دستی
+              </button>
+            </div>
 
-          {/* Order Filters */}
-          <OrderFilters
-            value={orderFilter}
-            onChange={setOrderFilter}
-            onReset={() => {
-              setOrderFilter({
-                source: "all",
-                status: "all",
-                dateFrom: "",
-                dateTo: "",
-                search: "",
-                minAmount: "",
-                maxAmount: ""
-              });
-              setSelectedOrders(new Set());
-            }}
-            isDark={isDark}
-          />
-
-          {/* Bulk Actions */}
-          <OrderBulkActions
-            selectedCount={selectedOrders.size}
-            isDark={isDark}
-            onCompleteSelected={async () => {
-              if (confirm(`آیا می‌خواهید ${selectedOrders.size} سفارش را تکمیل کنید؟`)) {
-                for (const orderId of selectedOrders) {
-                  await handleOrderStatusChange(orderId, "completed");
-                }
+            {/* Order Filters */}
+            <OrderFilters
+              value={orderFilter}
+              onChange={setOrderFilter}
+              onReset={() => {
+                setOrderFilter({
+                  source: "all",
+                  status: "all",
+                  dateFrom: "",
+                  dateTo: "",
+                  search: "",
+                  minAmount: "",
+                  maxAmount: ""
+                });
                 setSelectedOrders(new Set());
-              }
-            }}
-            onCancelSelected={async () => {
-              if (confirm(`آیا می‌خواهید ${selectedOrders.size} سفارش را لغو کنید؟`)) {
-                for (const orderId of selectedOrders) {
-                  await handleOrderStatusChange(orderId, "cancelled");
-                }
-                setSelectedOrders(new Set());
-              }
-            }}
-            onClearSelection={() => setSelectedOrders(new Set())}
-          />
+              }}
+              isDark={isDark}
+            />
 
-          {/* Orders Table */}
-          {(() => {
-            // Filter orders
-            let filtered = filterOrders(orders as any, {
-              source: orderFilter.source === "all" ? undefined : orderFilter.source,
-              status: orderFilter.status === "all" ? undefined : orderFilter.status,
-              search: orderFilter.search || undefined
-            });
-
-            // Apply date filters using Jalali dates
-            if (orderFilter.dateFrom) {
-              const startDate = jalaliToTimestamp(orderFilter.dateFrom);
-              filtered = filtered.filter(order => {
-                let orderTimestamp = 0;
-                if (order.createdAt) {
-                  if (typeof order.createdAt === "string") {
-                    orderTimestamp = Math.floor(
-                      new Date(order.createdAt).getTime() / 1000
-                    );
-                  } else {
-                    orderTimestamp = order.createdAt;
+            {/* Bulk Actions */}
+            <OrderBulkActions
+              selectedCount={selectedOrders.size}
+              isDark={isDark}
+              onCompleteSelected={async () => {
+                if (
+                  confirm(
+                    `آیا می‌خواهید ${selectedOrders.size} سفارش را تکمیل کنید؟`
+                  )
+                ) {
+                  for (const orderId of selectedOrders) {
+                    await handleOrderStatusChange(orderId, "completed");
                   }
+                  setSelectedOrders(new Set());
                 }
-                return orderTimestamp >= startDate;
-              });
-            }
-            if (orderFilter.dateTo) {
-              let endDate = jalaliToTimestamp(orderFilter.dateTo);
-              // Set end time to end of day
-              endDate = endDate + 24 * 60 * 60 - 1;
-              filtered = filtered.filter(order => {
-                let orderTimestamp = 0;
-                if (order.createdAt) {
-                  if (typeof order.createdAt === "string") {
-                    orderTimestamp = Math.floor(
-                      new Date(order.createdAt).getTime() / 1000
-                    );
-                  } else {
-                    orderTimestamp = order.createdAt;
+              }}
+              onCancelSelected={async () => {
+                if (
+                  confirm(
+                    `آیا می‌خواهید ${selectedOrders.size} سفارش را لغو کنید؟`
+                  )
+                ) {
+                  for (const orderId of selectedOrders) {
+                    await handleOrderStatusChange(orderId, "cancelled");
                   }
+                  setSelectedOrders(new Set());
                 }
-                return orderTimestamp <= endDate;
+              }}
+              onClearSelection={() => setSelectedOrders(new Set())}
+            />
+
+            {/* Orders Table */}
+            {(() => {
+              // Filter orders
+              let filtered = filterOrders(orders as any, {
+                source:
+                  orderFilter.source === "all" ? undefined : orderFilter.source,
+                status:
+                  orderFilter.status === "all" ? undefined : orderFilter.status,
+                search: orderFilter.search || undefined
               });
-            }
 
-            // Apply amount filters
-            if (orderFilter.minAmount) {
-              const minAmount = parseFloat(orderFilter.minAmount);
-              filtered = filtered.filter(order => {
-                const total = order.totalAmount || order.totalPrice || 0;
-                return total >= minAmount;
-              });
-            }
-            if (orderFilter.maxAmount) {
-              const maxAmount = parseFloat(orderFilter.maxAmount);
-              filtered = filtered.filter(order => {
-                const total = order.totalAmount || order.totalPrice || 0;
-                return total <= maxAmount;
-              });
-            }
-
-            // Sort by date descending
-            filtered = sortOrders(filtered, "date", "desc");
-
-            const allFilteredSelected = filtered.length > 0 && filtered.every(order => selectedOrders.has(order.id));
-            const someFilteredSelected = filtered.some(order => selectedOrders.has(order.id));
-
-            return (
-              <div className="space-y-6">
-                {/* Select All Checkbox */}
-                {filtered.length > 0 && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-neutral-800/50">
-                    <button
-                      onClick={() => {
-                        if (allFilteredSelected) {
-                          // Deselect all filtered
-                          const newSelected = new Set(selectedOrders);
-                          filtered.forEach(order => newSelected.delete(order.id));
-                          setSelectedOrders(newSelected);
-                        } else {
-                          // Select all filtered
-                          const newSelected = new Set(selectedOrders);
-                          filtered.forEach(order => newSelected.add(order.id));
-                          setSelectedOrders(newSelected);
-                        }
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      {allFilteredSelected ? (
-                        <CheckSquare size={20} className="text-coffee-500" />
-                      ) : (
-                        <Square size={20} className="text-gray-400" />
-                      )}
-                      <span className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                        {allFilteredSelected ? "لغو انتخاب همه" : "انتخاب همه"}
-                      </span>
-                    </button>
-                    {someFilteredSelected && (
-                      <span className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}>
-                        ({toPersianDigits(selectedOrders.size.toString())} انتخاب شده)
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <OrdersTable
-                  orders={filtered as any}
-                  currentPage={ordersPage}
-                  itemsPerPage={ordersPerPage}
-                  onStatusChange={handleOrderStatusChange}
-                  selectedOrders={selectedOrders}
-                  onToggleSelect={(orderId) => {
-                    const newSelected = new Set(selectedOrders);
-                    if (newSelected.has(orderId)) {
-                      newSelected.delete(orderId);
+              // Apply date filters using Jalali dates
+              if (orderFilter.dateFrom) {
+                const startDate = jalaliToTimestamp(orderFilter.dateFrom);
+                filtered = filtered.filter(order => {
+                  let orderTimestamp = 0;
+                  if (order.createdAt) {
+                    if (typeof order.createdAt === "string") {
+                      orderTimestamp = Math.floor(
+                        new Date(order.createdAt).getTime() / 1000
+                      );
                     } else {
-                      newSelected.add(orderId);
+                      orderTimestamp = order.createdAt;
                     }
-                    setSelectedOrders(newSelected);
-                  }}
-                  onViewDetail={(order) => {
-                    setSelectedOrderDetail(order);
-                    setShowOrderDetail(true);
-                  }}
-                  isDark={isDark}
-                />
+                  }
+                  return orderTimestamp >= startDate;
+                });
+              }
+              if (orderFilter.dateTo) {
+                let endDate = jalaliToTimestamp(orderFilter.dateTo);
+                // Set end time to end of day
+                endDate = endDate + 24 * 60 * 60 - 1;
+                filtered = filtered.filter(order => {
+                  let orderTimestamp = 0;
+                  if (order.createdAt) {
+                    if (typeof order.createdAt === "string") {
+                      orderTimestamp = Math.floor(
+                        new Date(order.createdAt).getTime() / 1000
+                      );
+                    } else {
+                      orderTimestamp = order.createdAt;
+                    }
+                  }
+                  return orderTimestamp <= endDate;
+                });
+              }
 
-                {/* Pagination Controls */}
-                {(() => {
-                  const info = getPaginationInfo(
-                    filtered.length,
-                    ordersPage,
-                    ordersPerPage
-                  );
+              // Apply amount filters
+              if (orderFilter.minAmount) {
+                const minAmount = parseFloat(orderFilter.minAmount);
+                filtered = filtered.filter(order => {
+                  const total = order.totalAmount || order.totalPrice || 0;
+                  return total >= minAmount;
+                });
+              }
+              if (orderFilter.maxAmount) {
+                const maxAmount = parseFloat(orderFilter.maxAmount);
+                filtered = filtered.filter(order => {
+                  const total = order.totalAmount || order.totalPrice || 0;
+                  return total <= maxAmount;
+                });
+              }
 
-                  if (info.pages <= 1) return null;
+              // Sort by date descending
+              filtered = sortOrders(filtered, "date", "desc");
 
-                  return (
-                    <div className="flex justify-center items-center gap-3 p-4">
+              const allFilteredSelected =
+                filtered.length > 0 &&
+                filtered.every(order => selectedOrders.has(order.id));
+              const someFilteredSelected = filtered.some(order =>
+                selectedOrders.has(order.id)
+              );
+
+              return (
+                <div className="space-y-6">
+                  {/* Select All Checkbox */}
+                  {filtered.length > 0 && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-neutral-800/50">
                       <button
-                        onClick={() =>
-                          setOrdersPage(Math.max(1, ordersPage - 1))
-                        }
-                        disabled={!info.hasPrevPage}
-                        className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                        onClick={() => {
+                          if (allFilteredSelected) {
+                            // Deselect all filtered
+                            const newSelected = new Set(selectedOrders);
+                            filtered.forEach(order =>
+                              newSelected.delete(order.id)
+                            );
+                            setSelectedOrders(newSelected);
+                          } else {
+                            // Select all filtered
+                            const newSelected = new Set(selectedOrders);
+                            filtered.forEach(order =>
+                              newSelected.add(order.id)
+                            );
+                            setSelectedOrders(newSelected);
+                          }
+                        }}
+                        className="flex items-center gap-2"
                       >
-                        قبلی
+                        {allFilteredSelected ? (
+                          <CheckSquare size={20} className="text-coffee-500" />
+                        ) : (
+                          <Square size={20} className="text-gray-400" />
+                        )}
+                        <span
+                          className={`text-sm ${isDark ? "text-gray-300" : "text-gray-700"}`}
+                        >
+                          {allFilteredSelected
+                            ? "لغو انتخاب همه"
+                            : "انتخاب همه"}
+                        </span>
                       </button>
-                      <span className="text-white text-sm font-medium px-4">
-                        صفحه {formatPersianNumber(info.page)} از{" "}
-                        {formatPersianNumber(info.pages)}
-                      </span>
-                      <button
-                        onClick={() =>
-                          setOrdersPage(Math.min(info.pages, ordersPage + 1))
-                        }
-                        disabled={!info.hasNextPage}
-                        className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
-                      >
-                        بعدی
-                      </button>
+                      {someFilteredSelected && (
+                        <span
+                          className={`text-xs ${isDark ? "text-gray-500" : "text-gray-600"}`}
+                        >
+                          ({toPersianDigits(selectedOrders.size.toString())}{" "}
+                          انتخاب شده)
+                        </span>
+                      )}
                     </div>
-                  );
-                })()}
-              </div>
-            );
-          })()}
-        </div>
+                  )}
+
+                  <OrdersTable
+                    orders={filtered as any}
+                    currentPage={ordersPage}
+                    itemsPerPage={ordersPerPage}
+                    onStatusChange={handleOrderStatusChange}
+                    selectedOrders={selectedOrders}
+                    onToggleSelect={orderId => {
+                      const newSelected = new Set(selectedOrders);
+                      if (newSelected.has(orderId)) {
+                        newSelected.delete(orderId);
+                      } else {
+                        newSelected.add(orderId);
+                      }
+                      setSelectedOrders(newSelected);
+                    }}
+                    onViewDetail={order => {
+                      setSelectedOrderDetail(order);
+                      setShowOrderDetail(true);
+                    }}
+                    isDark={isDark}
+                  />
+
+                  {/* Pagination Controls */}
+                  {(() => {
+                    const info = getPaginationInfo(
+                      filtered.length,
+                      ordersPage,
+                      ordersPerPage
+                    );
+
+                    if (info.pages <= 1) return null;
+
+                    return (
+                      <div className="flex justify-center items-center gap-3 p-4">
+                        <button
+                          onClick={() =>
+                            setOrdersPage(Math.max(1, ordersPage - 1))
+                          }
+                          disabled={!info.hasPrevPage}
+                          className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                        >
+                          قبلی
+                        </button>
+                        <span className="text-white text-sm font-medium px-4">
+                          صفحه {formatPersianNumber(info.page)} از{" "}
+                          {formatPersianNumber(info.pages)}
+                        </span>
+                        <button
+                          onClick={() =>
+                            setOrdersPage(Math.min(info.pages, ordersPage + 1))
+                          }
+                          disabled={!info.hasNextPage}
+                          className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                        >
+                          بعدی
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+          </div>
         );
-      
+
       case "menu":
         return (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-            {/* Form Section */}
-            <div className="lg:col-span-1">
-              <MenuItemForm
-                editingItem={menuItems.editingItem}
-                onSubmit={menuItems.handleSubmit}
-                onCancel={menuItems.handleCancel}
-                onManageIngredients={() => {
-                  if (menuItems.editingItem) {
-                    setIngredientModalItemId(menuItems.editingItem.id);
-                    setShowIngredientModal(true);
-                  }
-                }}
-                isDark={isDark}
-                isSubmitting={menuItems.isSubmitting}
-              />
-            </div>
-
-            {/* List Section */}
-            <div className="lg:col-span-2">
-              <MenuTable
-                items={items}
-                onEdit={menuItems.handleEdit}
-                onDelete={menuItems.handleDelete}
-                onManageIngredients={(itemId) => {
-                  setIngredientModalItemId(itemId);
-                  setShowIngredientModal(true);
-                }}
-                onTogglePin={async (itemId: string, isPinned: boolean) => {
-                  try {
-                    await updateItem(itemId, { is_pinned: isPinned } as any);
-                  } catch (err) {
-                    console.error("Failed to toggle pin:", err);
-                    alert("خطا در تغییر وضعیت ثابت کردن");
-                  }
-                }}
-                onToggleSuggest={async (itemId: string, isSuggested: boolean) => {
-                  try {
-                    await updateItem(itemId, { is_suggested: isSuggested } as any);
-                  } catch (err) {
-                    console.error("Failed to toggle suggest:", err);
-                    alert("خطا در تغییر وضعیت پیشنهاد");
-                  }
-                }}
-                onReorder={async (itemOrders: Array<{ id: string; display_order: number }>) => {
-                  try {
-                    const adminToken = process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
-                    const response = await fetch("/api/menu/reorder", {
-                      method: "PUT",
-                      headers: {
-                        "Content-Type": "application/json",
-                        ...(adminToken ? { "x-access-token": adminToken } : {}),
-                      },
-                      credentials: "include",
-                      body: JSON.stringify({ itemOrders }),
-                    });
-                    if (response.ok) {
-                      // MenuContext will automatically refresh via subscribeToMenu
-                      alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
-                    } else {
-                      throw new Error("Failed to reorder");
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+              {/* Form Section */}
+              <div className="lg:col-span-1">
+                <MenuItemForm
+                  editingItem={menuItems.editingItem}
+                  onSubmit={menuItems.handleSubmit}
+                  onCancel={menuItems.handleCancel}
+                  onManageIngredients={() => {
+                    if (menuItems.editingItem) {
+                      setIngredientModalItemId(menuItems.editingItem.id);
+                      setShowIngredientModal(true);
                     }
-                  } catch (err) {
-                    console.error("Failed to reorder items:", err);
-                    alert("خطا در تغییر ترتیب آیتم‌ها");
-                  }
-                }}
-                isDark={isDark}
-              />
+                  }}
+                  isDark={isDark}
+                  isSubmitting={menuItems.isSubmitting}
+                />
+              </div>
+
+              {/* List Section */}
+              <div className="lg:col-span-2">
+                <MenuTable
+                  items={items}
+                  onEdit={menuItems.handleEdit}
+                  onDelete={menuItems.handleDelete}
+                  onManageIngredients={itemId => {
+                    setIngredientModalItemId(itemId);
+                    setShowIngredientModal(true);
+                  }}
+                  onTogglePin={async (itemId: string, isPinned: boolean) => {
+                    try {
+                      await updateItem(itemId, { is_pinned: isPinned } as any);
+                    } catch (err) {
+                      console.error("Failed to toggle pin:", err);
+                      alert("خطا در تغییر وضعیت ثابت کردن");
+                    }
+                  }}
+                  onToggleSuggest={async (
+                    itemId: string,
+                    isSuggested: boolean
+                  ) => {
+                    try {
+                      await updateItem(itemId, {
+                        is_suggested: isSuggested
+                      } as any);
+                    } catch (err) {
+                      console.error("Failed to toggle suggest:", err);
+                      alert("خطا در تغییر وضعیت پیشنهاد");
+                    }
+                  }}
+                  onReorder={async (
+                    itemOrders: Array<{ id: string; display_order: number }>
+                  ) => {
+                    try {
+                      const adminToken =
+                        process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
+                      const response = await fetch("/api/menu/reorder", {
+                        method: "PUT",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...(adminToken
+                            ? { "x-access-token": adminToken }
+                            : {})
+                        },
+                        credentials: "include",
+                        body: JSON.stringify({ itemOrders })
+                      });
+                      if (response.ok) {
+                        // MenuContext will automatically refresh via subscribeToMenu
+                        alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
+                      } else {
+                        throw new Error("Failed to reorder");
+                      }
+                    } catch (err) {
+                      console.error("Failed to reorder items:", err);
+                      alert("خطا در تغییر ترتیب آیتم‌ها");
+                    }
+                  }}
+                  isDark={isDark}
+                />
+              </div>
             </div>
           </div>
-        </div>
         );
-      
+
       case "inventory":
         if (!isTabAccessible("inventory")) return null;
         return (
@@ -1024,275 +1125,275 @@ export default function AdminPage() {
             />
 
             <div className="flex justify-between items-center flex-wrap gap-4">
-            <h2
-              className={`text-xl font-bold ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              مدیریت موجودی
-            </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setInventoryTypeFilter("all")}
-                className={`px-4 py-2 rounded-lg font-bold transition ${
-                  inventoryTypeFilter === "all"
-                    ? "bg-coffee-600 text-white"
-                    : isDark
-                    ? "bg-neutral-800 text-gray-400 hover:text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              <h2
+                className={`text-xl font-bold ${
+                  isDark ? "text-white" : "text-gray-900"
                 }`}
               >
-                همه
-              </button>
-              <button
-                onClick={() => setInventoryTypeFilter("raw_material")}
-                className={`px-4 py-2 rounded-lg font-bold transition ${
-                  inventoryTypeFilter === "raw_material"
-                    ? "bg-coffee-600 text-white"
-                    : isDark
-                    ? "bg-neutral-800 text-gray-400 hover:text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                مواد اولیه
-              </button>
-              <button
-                onClick={() => setInventoryTypeFilter("packed_product")}
-                className={`px-4 py-2 rounded-lg font-bold transition ${
-                  inventoryTypeFilter === "packed_product"
-                    ? "bg-coffee-600 text-white"
-                    : isDark
-                    ? "bg-neutral-800 text-gray-400 hover:text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                محصولات بسته‌بندی
-              </button>
-              <button
-                onClick={() => setShowNewProductForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
-              >
-                <Plus size={18} />
-                افزودن محصول
-              </button>
-            </div>
-          </div>
-
-          {/* Products Table */}
-          <div
-            className={`overflow-x-auto rounded-2xl border ${
-              isDark
-                ? "bg-neutral-900 border-white/5"
-                : "bg-white border-gray-300"
-            }`}
-          >
-            <table className="w-full">
-              <thead>
-                <tr
-                  className={`border-b ${
-                    isDark ? "border-white/5" : "border-gray-300"
+                مدیریت موجودی
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setInventoryTypeFilter("all")}
+                  className={`px-4 py-2 rounded-lg font-bold transition ${
+                    inventoryTypeFilter === "all"
+                      ? "bg-coffee-600 text-white"
+                      : isDark
+                        ? "bg-neutral-800 text-gray-400 hover:text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
+                  همه
+                </button>
+                <button
+                  onClick={() => setInventoryTypeFilter("raw_material")}
+                  className={`px-4 py-2 rounded-lg font-bold transition ${
+                    inventoryTypeFilter === "raw_material"
+                      ? "bg-coffee-600 text-white"
+                      : isDark
+                        ? "bg-neutral-800 text-gray-400 hover:text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  مواد اولیه
+                </button>
+                <button
+                  onClick={() => setInventoryTypeFilter("packed_product")}
+                  className={`px-4 py-2 rounded-lg font-bold transition ${
+                    inventoryTypeFilter === "packed_product"
+                      ? "bg-coffee-600 text-white"
+                      : isDark
+                        ? "bg-neutral-800 text-gray-400 hover:text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  محصولات بسته‌بندی
+                </button>
+                <button
+                  onClick={() => setShowNewProductForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
+                >
+                  <Plus size={18} />
+                  افزودن محصول
+                </button>
+              </div>
+            </div>
+
+            {/* Products Table */}
+            <div
+              className={`overflow-x-auto rounded-2xl border ${
+                isDark
+                  ? "bg-neutral-900 border-white/5"
+                  : "bg-white border-gray-300"
+              }`}
+            >
+              <table className="w-full">
+                <thead>
+                  <tr
+                    className={`border-b ${
+                      isDark ? "border-white/5" : "border-gray-300"
                     }`}
                   >
-                    نوع
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    نام
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    دسته
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    واحد
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    موجودی
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    حداقل
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    قیمت
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    تامین‌کننده
-                  </th>
-                  <th
-                    className={`text-right px-6 py-4 font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    عملیات
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={9}
-                      className={`px-6 py-12 text-center ${
-                        isDark ? "text-gray-500" : "text-gray-400"
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
                       }`}
                     >
-                      محصولی وجود ندارد
-                    </td>
+                      نوع
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      نام
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      دسته
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      واحد
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      موجودی
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      حداقل
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      قیمت
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      تامین‌کننده
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      عملیات
+                    </th>
                   </tr>
-                ) : (
-                  products.map(product => (
-                    <tr
-                      key={product.id}
-                      onClick={() => setSelectedProduct(product)}
-                      className={`border-b cursor-pointer transition ${
-                        isDark
-                          ? "border-white/5 hover:bg-white/5"
-                          : "border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
+                </thead>
+                <tbody>
+                  {products.length === 0 ? (
+                    <tr>
                       <td
-                        className={`px-6 py-4 text-sm ${
-                          product.type === "raw_material"
-                            ? "text-blue-400"
-                            : "text-purple-400"
+                        colSpan={9}
+                        className={`px-6 py-12 text-center ${
+                          isDark ? "text-gray-500" : "text-gray-400"
                         }`}
                       >
-                        {product.type === "raw_material"
-                          ? "مواد اولیه"
-                          : "بسته‌بندی"}
-                      </td>
-                      <td
-                        className={`px-6 py-4 font-semibold ${
-                          isDark ? "text-white" : "text-gray-900"
-                        }`}
-                      >
-                        {product.name}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-sm ${
-                          isDark ? "text-gray-400" : "text-gray-600"
-                        }`}
-                      >
-                        {product.category}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-sm ${
-                          isDark ? "text-gray-400" : "text-gray-600"
-                        }`}
-                      >
-                        {product.unit}
-                      </td>
-                      <td
-                        className={`px-6 py-4 font-semibold ${
-                          product.currentStock < product.minStock
-                            ? "text-red-400"
-                            : "text-green-400"
-                        }`}
-                      >
-                        {toPersianDigits(product.currentStock.toString())}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-sm ${
-                          isDark ? "text-gray-400" : "text-gray-600"
-                        }`}
-                      >
-                        {toPersianDigits(product.minStock.toString())}
-                      </td>
-                      <td
-                        className={`px-6 py-4 font-semibold ${
-                          isDark ? "text-amber-400" : "text-amber-600"
-                        }`}
-                      >
-                        {formatToman(product.price)}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-sm ${
-                          isDark ? "text-gray-400" : "text-gray-600"
-                        }`}
-                      >
-                        {product.supplier || "-"}
-                      </td>
-                      <td
-                        className="px-6 py-4"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleViewLogs(product.id)}
-                            className="p-1 hover:bg-blue-500/20 rounded transition"
-                            title="تاریخچه"
-                          >
-                            <History size={18} className="text-blue-500" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProduct(product.id)}
-                            className="p-1 hover:bg-red-500/20 rounded transition"
-                            title="حذف"
-                          >
-                            <Trash2 size={18} className="text-red-500" />
-                          </button>
-                        </div>
+                        محصولی وجود ندارد
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    products.map(product => (
+                      <tr
+                        key={product.id}
+                        onClick={() => setSelectedProduct(product)}
+                        className={`border-b cursor-pointer transition ${
+                          isDark
+                            ? "border-white/5 hover:bg-white/5"
+                            : "border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        <td
+                          className={`px-6 py-4 text-sm ${
+                            product.type === "raw_material"
+                              ? "text-blue-400"
+                              : "text-purple-400"
+                          }`}
+                        >
+                          {product.type === "raw_material"
+                            ? "مواد اولیه"
+                            : "بسته‌بندی"}
+                        </td>
+                        <td
+                          className={`px-6 py-4 font-semibold ${
+                            isDark ? "text-white" : "text-gray-900"
+                          }`}
+                        >
+                          {product.name}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-sm ${
+                            isDark ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          {product.category}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-sm ${
+                            isDark ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          {product.unit}
+                        </td>
+                        <td
+                          className={`px-6 py-4 font-semibold ${
+                            product.currentStock < product.minStock
+                              ? "text-red-400"
+                              : "text-green-400"
+                          }`}
+                        >
+                          {toPersianDigits(product.currentStock.toString())}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-sm ${
+                            isDark ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          {toPersianDigits(product.minStock.toString())}
+                        </td>
+                        <td
+                          className={`px-6 py-4 font-semibold ${
+                            isDark ? "text-amber-400" : "text-amber-600"
+                          }`}
+                        >
+                          {formatToman(product.price)}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-sm ${
+                            isDark ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          {product.supplier || "-"}
+                        </td>
+                        <td
+                          className="px-6 py-4"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleViewLogs(product.id)}
+                              className="p-1 hover:bg-blue-500/20 rounded transition"
+                              title="تاریخچه"
+                            >
+                              <History size={18} className="text-blue-500" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className="p-1 hover:bg-red-500/20 rounded transition"
+                              title="حذف"
+                            >
+                              <Trash2 size={18} className="text-red-500" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         );
-      
+
       case "branches":
         if (!isTabAccessible("branches")) return null;
         return <BranchesManagement isDark={isDark} />;
-      
+
       case "customers":
         if (!isTabAccessible("customers")) return null;
         return <CustomersManagement isDark={isDark} />;
-      
+
       case "settings":
         if (!isTabAccessible("settings")) return null;
         return <SiteSettings isDark={isDark} />;
-      
+
       case "banners":
         if (!isTabAccessible("banners")) return null;
         return <BannerManager isDark={isDark} />;
-      
+
       case "working-hours":
         if (!isTabAccessible("working-hours")) return null;
         return <WorkingHoursManager isDark={isDark} />;
-      
+
       case "stats":
         if (!isTabAccessible("stats")) return null;
         return (
@@ -1305,7 +1406,7 @@ export default function AdminPage() {
             />
           </div>
         );
-      
+
       case "customer-orders":
         if (!isTabAccessible("customer-orders")) return null;
         return (
@@ -1313,7 +1414,7 @@ export default function AdminPage() {
             <CustomerOrders orders={orders} isDark={isDark} />
           </div>
         );
-      
+
       case "expenses":
         if (!isTabAccessible("expenses")) return null;
         return (
@@ -1321,7 +1422,7 @@ export default function AdminPage() {
             <ExpenseManager isDark={isDark} />
           </div>
         );
-      
+
       case "ratings":
         if (!isTabAccessible("ratings")) return null;
         return (
@@ -1329,7 +1430,7 @@ export default function AdminPage() {
             <RatingsApproval isDark={isDark} />
           </div>
         );
-      
+
       case "customer-messages":
         if (!isTabAccessible("customer-messages")) return null;
         return (
@@ -1337,7 +1438,7 @@ export default function AdminPage() {
             <CustomerMessagesManager isDark={isDark} />
           </div>
         );
-      
+
       case "loyalty":
         if (!isTabAccessible("loyalty")) return null;
         return (
@@ -1345,7 +1446,7 @@ export default function AdminPage() {
             <LoyaltyProgramManager isDark={isDark} />
           </div>
         );
-      
+
       case "staff":
         if (!isTabAccessible("staff")) return null;
         return (
@@ -1353,7 +1454,7 @@ export default function AdminPage() {
             <StaffManagement isDark={isDark} />
           </div>
         );
-      
+
       case "gallery":
         if (!isTabAccessible("gallery")) return null;
         return (
@@ -1361,7 +1462,7 @@ export default function AdminPage() {
             <GalleryManager isDark={isDark} />
           </div>
         );
-      
+
       case "stories":
         if (!isTabAccessible("stories")) return null;
         return (
@@ -1369,7 +1470,7 @@ export default function AdminPage() {
             <StoryManager isDark={isDark} />
           </div>
         );
-      
+
       case "experience-comments":
         if (!isTabAccessible("experience-comments")) return null;
         return (
@@ -1377,7 +1478,7 @@ export default function AdminPage() {
             <ExperienceCommentsManager isDark={isDark} />
           </div>
         );
-      
+
       case "reports":
         if (!isTabAccessible("reports")) return null;
         return (
@@ -1385,7 +1486,7 @@ export default function AdminPage() {
             <ReportsManager isDark={isDark} />
           </div>
         );
-      
+
       case "waste":
         if (!isTabAccessible("waste")) return null;
         return (
@@ -1393,44 +1494,57 @@ export default function AdminPage() {
             <WasteManager isDark={isDark} />
           </div>
         );
-      
+
       default:
         return null;
     }
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" dir="rtl">
-      {/* Sidebar */}
+    <div
+      className={cn("flex h-screen overflow-hidden", isDark ? "bg-[#0d0f13]" : "bg-gray-50")}
+      dir="rtl"
+    >
+      {/* Sidebar — fixed overlay on mobile, inline on desktop */}
       <DashboardSidebar
         isDark={isDark}
         userRole={userRole}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isMobileOpen={sidebarMobileOpen}
+        onMobileOpen={() => setSidebarMobileOpen(true)}
+        onMobileClose={() => setSidebarMobileOpen(false)}
         pendingOrdersCount={pendingOrdersCount}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content — full width on mobile since sidebar is an overlay */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 w-full">
         {/* Header */}
-        <div className={cn("border-b", isDark ? "bg-neutral-900 border-white/10" : "bg-white border-gray-200")}>
-          <div className="px-6 py-4">
+        <div
+          className={cn(
+            "h-16 flex items-center border-b shrink-0",
+            isDark
+              ? "bg-[#111318] border-white/5"
+              : "bg-white border-gray-100"
+          )}
+        >
+          <div className="flex-1 px-5">
             <DashboardHeader
-              title="پنل مدیریت کافه واژه"
-              selectedBranchId={selectedBranchId}
-              onBranchChange={setSelectedBranchId}
               isDark={isDark}
               onLogout={handleLogout}
               onToggleTheme={toggleTheme}
-              pendingOrdersCount={pendingOrdersCount}
-              userRole={userRole}
             />
           </div>
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto",
+            isDark ? "bg-[#0d0f13]" : "bg-gray-50"
+          )}
+        >
+          <div className="max-w-7xl mx-auto px-5 py-6">
             {renderPageContent()}
           </div>
         </div>

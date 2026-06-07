@@ -2,10 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { toPersianDigits } from "@/utils/format";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 
 interface Photo {
   id: string;
@@ -105,9 +102,7 @@ export default function GalleryPage() {
 
   return (
     <div className="min-h-screen dark:bg-neutral-950 bg-primary-500" dir="rtl">
-      <Navbar />
-      
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-serif font-bold text-white mb-4">
             گالری عکس
@@ -122,7 +117,7 @@ export default function GalleryPage() {
             <p>گالری‌ای موجود نیست</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {galleries.map((gallery) => (
               <div
                 key={gallery.id}
@@ -165,7 +160,7 @@ export default function GalleryPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Lightbox */}
       {lightboxPhoto && selectedGallery && (
@@ -228,8 +223,6 @@ export default function GalleryPage() {
           </div>
         </div>
       )}
-
-      <Footer />
     </div>
   );
 }

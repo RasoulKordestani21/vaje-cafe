@@ -2,104 +2,82 @@
 
 import React from "react";
 import Link from "next/link";
-import { LogOut, Moon, Sun, LayoutDashboard, Clock, Coffee, Users, Building2, ShoppingCart, ChefHat } from "lucide-react";
-import BranchSelector from "@/components/BranchSelector";
-import { Button } from "@/components/ui/button";
+import { LogOut, Moon, Sun, ShoppingCart, ChefHat } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toPersianDigits } from "@/utils/format";
 
 interface DashboardHeaderProps {
-  title: string;
-  selectedBranchId: string | null;
-  onBranchChange: (branchId: string | null) => void;
   isDark: boolean;
   onLogout: () => void;
   onToggleTheme: () => void;
-  pendingOrdersCount: number;
-  userRole: "admin" | "super_admin" | null;
 }
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
-  title,
-  selectedBranchId,
-  onBranchChange,
   isDark,
   onLogout,
-  onToggleTheme,
-  pendingOrdersCount,
-  userRole
+  onToggleTheme
 }) => {
   return (
-    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-      <div className="flex items-center gap-4">
-        <h1 className={cn("font-serif text-3xl font-bold", isDark ? "text-white" : "text-gray-900")}>
-          {title}
-        </h1>
-        <BranchSelector
-          selectedBranchId={selectedBranchId}
-          onBranchChange={onBranchChange}
-          isDark={isDark}
-        />
-      </div>
-      <div className="flex gap-2">
+    <div className="flex items-center justify-end gap-3">
+      <div className="flex items-center gap-1.5 shrink-0">
         <Link href="/pos">
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
             className={cn(
-              "h-10 w-10",
+              "h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
               isDark
-                ? "bg-coffee-900/50 hover:bg-coffee-800 text-coffee-100"
-                : "bg-coffee-100 hover:bg-coffee-200 text-coffee-700"
+                ? "bg-white/8 hover:bg-white/14 text-gray-300 hover:text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900"
             )}
             title="سیستم فروش (POS)"
           >
-            <ShoppingCart size={18} />
-          </Button>
+            <ShoppingCart size={16} />
+          </button>
         </Link>
         <Link href="/kitchen">
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
             className={cn(
-              "h-10 w-10",
+              "h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
               isDark
-                ? "bg-green-900/50 hover:bg-green-800 text-green-100"
-                : "bg-green-100 hover:bg-green-200 text-green-700"
+                ? "bg-white/8 hover:bg-white/14 text-gray-300 hover:text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900"
             )}
             title="نمایش آشپزخانه (KDS)"
           >
-            <ChefHat size={18} />
-          </Button>
+            <ChefHat size={16} />
+          </button>
         </Link>
-        <Button
-          onClick={onLogout}
-          variant="ghost"
-          size="icon"
+
+        {/* Divider */}
+        <div
           className={cn(
-            "h-10 w-10",
+            "w-px h-5 mx-0.5 rounded-full",
+            isDark ? "bg-white/10" : "bg-gray-200"
+          )}
+        />
+
+        <button
+          onClick={onToggleTheme}
+          className={cn(
+            "h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
             isDark
-              ? "bg-red-900/50 hover:bg-red-900 text-red-100"
-              : "bg-red-100 hover:bg-red-200 text-red-700"
+              ? "bg-white/8 hover:bg-white/14 text-gray-300 hover:text-white"
+              : "bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900"
+          )}
+          title={isDark ? "تبدیل به حالت روشن" : "تبدیل به حالت تاریک"}
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        <button
+          onClick={onLogout}
+          className={cn(
+            "h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
+            isDark
+              ? "bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300"
+              : "bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600"
           )}
           title="خروج"
         >
-          <LogOut size={18} />
-        </Button>
-        <Button
-          onClick={onToggleTheme}
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-10 w-10",
-            isDark
-              ? "bg-gray-700 hover:bg-gray-600 text-gray-100"
-              : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-          )}
-          title={isDark ? "تبدیل به روشن" : "تبدیل به تاریک"}
-        >
-          {isDark ? <Sun size={18} /> : <Moon size={18} />}
-        </Button>
+          <LogOut size={16} />
+        </button>
       </div>
     </div>
   );

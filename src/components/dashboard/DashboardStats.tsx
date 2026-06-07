@@ -36,7 +36,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
     <div className="space-y-8">
       {/* Date Range Filter */}
       <div
-        className={`p-4 rounded-2xl border flex flex-col sm:flex-row gap-4 items-end ${
+        className={`p-4 rounded-2xl border flex flex-row sm:flex-col gap-4 items-end ${
           isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
         }`}
       >
