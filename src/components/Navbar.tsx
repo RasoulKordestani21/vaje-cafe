@@ -110,17 +110,16 @@ const Navbar: React.FC = () => {
     return null;
   };
 
+  const navSurface = isDark
+    ? "bg-neutral-900/90 backdrop-blur-xl border border-white/10 shadow-lg shadow-black/25"
+    : "bg-white/90 backdrop-blur-xl border border-primary-500/10 shadow-lg shadow-primary-900/10";
+
   return (
     <nav
-      className={`fixed w-full z-50 transition-all duration-300 ${
-         isDark
-            ? "bg-neutral-900/90 backdrop-blur-md shadow-lg border-b border-white/5"
-            : "bg-white/90 backdrop-blur-md shadow-lg border-b border-primary-500/10"
-          // : "bg-transparent"
-      }`}
+      className={`fixed z-50 transition-all duration-300 inset-x-3 sm:inset-x-5 lg:inset-x-8 top-3 sm:top-4 max-w-5xl mx-auto rounded-2xl ${navSurface}`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-24">
+      <div className="px-3 sm:px-5 lg:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           {/* Logo Section - CAFE VAJE */}
           {!isAdminRoute && stories.length > 0 ? (
             <button
@@ -342,11 +341,11 @@ const Navbar: React.FC = () => {
         {/* Mobile Navigation */}
         {isOpen && (
           <div
-            className={`md:hidden py-4 border-t ${
-              isDark ? "border-primary-800" : "border-primary-200"
+            className={`md:hidden py-3 border-t ${
+              isDark ? "border-white/10" : "border-primary-200/80"
             }`}
           >
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5 pb-1">
               {!isAdminRoute && (
                 <>
                   <Link

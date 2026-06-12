@@ -9,7 +9,7 @@ export default function UserLayout({
   return (
     <>
       <Navbar />
-      <main className="flex-grow pt-20">{children}</main>
+      <main className="flex-grow pt-[5.25rem] sm:pt-24">{children}</main>
       <Footer />
     </>
   );
