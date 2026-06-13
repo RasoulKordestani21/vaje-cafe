@@ -19,11 +19,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate OTP format (accept both 4-digit test code and 6-digit codes)
+    // Validate OTP format (4 digits)
     const normalizedOtp = otp.replace(/\D/g, "");
-    if (!/^\d{4}$/.test(normalizedOtp) && !/^\d{6}$/.test(normalizedOtp)) {
+    if (!/^\d{4}$/.test(normalizedOtp)) {
       return NextResponse.json(
-        { error: "کد OTP باید ۴ یا ۶ رقم باشد" },
+        { error: "کد تأیید باید ۴ رقم باشد" },
         { status: 400 }
       );
     }
@@ -37,11 +37,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Normalize OTP (accept both "1234" and "001234")
-    const otpToVerify = normalizedOtp === "1234" ? "001234" : normalizedOtp;
-
     // Verify OTP
-    const otpRecord = verifyCustomerOTP(normalizedPhone, otpToVerify);
+    const otpRecord = verifyCustomerOTP(normalizedPhone, normalizedOtp);
 
     if (!otpRecord) {
       return NextResponse.json(

@@ -52,6 +52,36 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 // ── Tab type ───────────────────────────────────────────────────────────────────
 type Tab = "profile" | "orders" | "loyalty" | "messages";
 
+interface CustomerMessageItem {
+  admin_replied: boolean;
+  updatedAt: number;
+}
+
+interface LoyaltyTransaction {
+  transaction_type: string;
+  created_at: string;
+}
+
+const TAB_SEEN_KEY = "vaje_profile_tab_seen";
+type TabSeenMap = Partial<Record<"loyalty" | "messages", number>>;
+
+function readTabSeen(): TabSeenMap {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(TAB_SEEN_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function markTabSeen(tab: "loyalty" | "messages") {
+  const seen = { ...readTabSeen(), [tab]: Math.floor(Date.now() / 1000) };
+  localStorage.setItem(TAB_SEEN_KEY, JSON.stringify(seen));
+  return seen;
+}
+
+const ACTIVE_ORDER_STATUSES = new Set(["pending", "preparing", "ready"]);
+
 // ═════════════════════════════════════════════════════════════════════════════
 export default function CustomerProfile({ isDark = false }: CustomerProfileProps) {
   const router        = useRouter();
@@ -72,13 +102,30 @@ export default function CustomerProfile({ isDark = false }: CustomerProfileProps
   const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeTab, setActiveTab]   = useState<Tab>("profile");
+  const [tabSeen, setTabSeen]       = useState<TabSeenMap>({});
+  const [messages, setMessages]     = useState<CustomerMessageItem[]>([]);
+  const [loyaltyTx, setLoyaltyTx]   = useState<LoyaltyTransaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(TAB_SEEN_KEY);
+    if (!raw) {
+      const now = Math.floor(Date.now() / 1000);
+      const initial: TabSeenMap = { loyalty: now, messages: now };
+      localStorage.setItem(TAB_SEEN_KEY, JSON.stringify(initial));
+      setTabSeen(initial);
+    } else {
+      setTabSeen(readTabSeen());
+    }
+  }, []);
 
   useEffect(() => {
     if (!authChecked) return;
     if (!isAuthenticated) { router.push("/customer/login"); return; }
     fetchProfile();
     fetchOrders();
+    fetchMessages();
+    fetchLoyaltyTransactions();
   }, [authChecked, isAuthenticated, router]);
 
   const fetchProfile = async () => {
@@ -105,6 +152,33 @@ export default function CustomerProfile({ isDark = false }: CustomerProfileProps
       if (res.ok) { const d = await res.json(); setOrders(d.orders || []); }
       else if (res.status === 401) { logout(); router.push("/customer/login"); }
     } catch {}
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const res = await fetch("/api/customer-messages/my-messages", { credentials: "include" });
+      if (res.ok) {
+        const d = await res.json();
+        setMessages(d.messages || []);
+      }
+    } catch {}
+  };
+
+  const fetchLoyaltyTransactions = async () => {
+    try {
+      const res = await fetch("/api/loyalty/points?limit=50", { credentials: "include" });
+      if (res.ok) {
+        const d = await res.json();
+        setLoyaltyTx(d.transactions || []);
+      }
+    } catch {}
+  };
+
+  const handleTabChange = (tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === "loyalty" || tab === "messages") {
+      setTabSeen(markTabSeen(tab));
+    }
   };
 
   const handleSave = async () => {
@@ -205,11 +279,27 @@ export default function CustomerProfile({ isDark = false }: CustomerProfileProps
   const avatarLetter = profile.name?.charAt(0) || profile.phoneNumber.slice(-1);
   const hasAvatar = !!(previewImage || profile.profilePicture);
 
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  const seenLoyalty = tabSeen.loyalty ?? 0;
+  const seenMessages = tabSeen.messages ?? 0;
+
+  const tabBadges = {
+    orders: orders.filter(o => ACTIVE_ORDER_STATUSES.has(o.status)).length,
+    loyalty: loyaltyTx.filter(t => {
+      if (t.transaction_type !== "earned") return false;
+      const ts = Math.floor(new Date(t.created_at).getTime() / 1000);
+      return ts > seenLoyalty;
+    }).length,
+    messages: messages.filter(m => {
+      if (!m.admin_replied) return false;
+      return m.updatedAt > seenMessages;
+    }).length,
+  };
+
+  const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "profile",  label: "پروفایل",   icon: <User size={15} /> },
-    { id: "orders",   label: "سفارشات",   icon: <ShoppingBag size={15} /> },
-    { id: "loyalty",  label: "امتیازها",  icon: <Star size={15} /> },
-    { id: "messages", label: "پیام‌ها",   icon: <MessageSquare size={15} /> },
+    { id: "orders",   label: "سفارشات",   icon: <ShoppingBag size={15} />, badge: tabBadges.orders },
+    { id: "loyalty",  label: "امتیازها",  icon: <Star size={15} />, badge: tabBadges.loyalty },
+    { id: "messages", label: "پیام‌ها",   icon: <MessageSquare size={15} />, badge: tabBadges.messages },
   ];
 
   return (
@@ -289,7 +379,7 @@ export default function CustomerProfile({ isDark = false }: CustomerProfileProps
             {TABS.map(t => (
               <button
                 key={t.id}
-                onClick={() => setActiveTab(t.id)}
+                onClick={() => handleTabChange(t.id)}
                 className={cn(
                   "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all",
                   activeTab === t.id
@@ -299,6 +389,11 @@ export default function CustomerProfile({ isDark = false }: CustomerProfileProps
               >
                 {t.icon}
                 {t.label}
+                {!!t.badge && t.badge > 0 && (
+                  <span className="min-w-[1.125rem] h-[1.125rem] px-1 rounded-full bg-[#186244] text-white text-[10px] font-bold flex items-center justify-center">
+                    {toPersianDigits(t.badge.toString())}
+                  </span>
+                )}
               </button>
             ))}
           </div>

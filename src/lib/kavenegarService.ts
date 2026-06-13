@@ -1,20 +1,12 @@
 /**
  * Kavenegar SMS Service
- * Handles SMS sending via Kavenegar API for OTP authentication
+ * Sends OTP codes via Kavenegar REST API
+ * Docs: https://app.kavenegar.com/sdk
  */
 
-interface KavenegarConfig {
-  apiKey: string;
-  sender: string; // Sender number (must be verified in Kavenegar panel)
-}
+const BASE_URL = "https://api.kavenegar.com/v1";
 
-interface SendOTPParams {
-  phoneNumber: string;
-  otp: string;
-  template?: string; // Optional template name
-}
-
-interface SendSMSResponse {
+interface SendSMSResult {
   success: boolean;
   messageId?: string;
   error?: string;
@@ -23,188 +15,108 @@ interface SendSMSResponse {
 class KavenegarService {
   private apiKey: string;
   private sender: string;
-  private baseUrl = "https://api.kavenegar.com/v1";
 
-  constructor(config: KavenegarConfig) {
-    this.apiKey = config.apiKey;
-    this.sender = config.sender;
+  constructor(apiKey: string, sender: string) {
+    this.apiKey = apiKey;
+    this.sender = sender;
   }
 
   /**
-   * Normalize phone number to Iranian format (09xxxxxxxxx)
+   * Normalize phone to 09xxxxxxxxx
    */
-  private normalizePhoneNumber(phone: string): string {
-    // Remove all non-digit characters
-    let normalized = phone.replace(/\D/g, "");
-
-    // If starts with +98, replace with 0
-    if (normalized.startsWith("98")) {
-      normalized = "0" + normalized.substring(2);
-    }
-
-    // If doesn't start with 0, add it
-    if (!normalized.startsWith("0")) {
-      normalized = "0" + normalized;
-    }
-
-    // Validate Iranian mobile number format (09xxxxxxxxx)
-    if (!/^09\d{9}$/.test(normalized)) {
-      throw new Error("فرمت شماره موبایل نامعتبر است");
-    }
-
-    return normalized;
+  private normalizePhone(phone: string): string {
+    let n = phone.replace(/\D/g, "");
+    if (n.startsWith("98")) n = "0" + n.slice(2);
+    if (!n.startsWith("0")) n = "0" + n;
+    if (!/^09\d{9}$/.test(n)) throw new Error("شماره موبایل نامعتبر است");
+    return n;
   }
 
   /**
-   * Send OTP via SMS using Kavenegar API
+   * Send OTP via plain SMS  (no template needed)
    */
-  async sendOTP({ phoneNumber, otp, template }: SendOTPParams): Promise<SendSMSResponse> {
+  async sendOTP({ phoneNumber, otp }: { phoneNumber: string; otp: string }): Promise<SendSMSResult> {
     try {
-      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
+      const receptor = this.normalizePhone(phoneNumber);
+      const message  = `کد ورود کافه واژه: ${otp}\nاین کد ۱۰ دقیقه معتبر است.`;
 
-      // If template is provided, use template API
-      if (template) {
-        return await this.sendWithTemplate(normalizedPhone, template, { token: otp });
-      }
+      const url    = `${BASE_URL}/${this.apiKey}/sms/send.json`;
+      const params = new URLSearchParams({ sender: this.sender, receptor, message });
 
-      // Otherwise, use simple SMS API
-      const message = `کد ورود شما: ${otp}\nاین کد ۱۰ دقیقه معتبر است.\nکافه واژه`;
-
-      return await this.sendSimpleSMS(normalizedPhone, message);
-    } catch (error: any) {
-      console.error("Kavenegar SMS error:", error);
-      return {
-        success: false,
-        error: error.message || "خطا در ارسال پیامک"
-      };
-    }
-  }
-
-  /**
-   * Send SMS using Kavenegar simple SMS API
-   */
-  private async sendSimpleSMS(
-    phoneNumber: string,
-    message: string
-  ): Promise<SendSMSResponse> {
-    try {
-      const url = `${this.baseUrl}/${this.apiKey}/sms/send.json`;
-
-      const params = new URLSearchParams({
-        sender: this.sender,
-        receptor: phoneNumber,
-        message: message
+      const res  = await fetch(url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body:    params.toString(),
       });
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: params.toString()
-      });
-
-      const data = await response.json();
+      const data = await res.json();
 
       if (data.return?.status === 200) {
-        return {
-          success: true,
-          messageId: data.entry?.messageid?.toString()
-        };
-      } else {
-        return {
-          success: false,
-          error: data.return?.message || "خطا در ارسال پیامک"
-        };
+        return { success: true, messageId: data.entries?.[0]?.messageid?.toString() };
       }
-    } catch (error: any) {
-      console.error("Kavenegar API error:", error);
-      return {
-        success: false,
-        error: error.message || "خطا در ارتباط با سرویس پیامک"
-      };
+
+      console.error("Kavenegar error:", data.return);
+      return { success: false, error: data.return?.message || "خطا در ارسال پیامک" };
+    } catch (err: any) {
+      console.error("Kavenegar fetch error:", err);
+      return { success: false, error: err.message || "خطا در ارتباط با سرویس پیامک" };
     }
   }
 
   /**
-   * Send SMS using Kavenegar template API
+   * Send OTP via a verified Kavenegar template (verify/lookup)
+   * templateName must be registered in your Kavenegar panel.
    */
-  private async sendWithTemplate(
-    phoneNumber: string,
-    template: string,
-    tokens: Record<string, string>
-  ): Promise<SendSMSResponse> {
+  async sendOTPWithTemplate({
+    phoneNumber,
+    otp,
+    template,
+  }: {
+    phoneNumber: string;
+    otp: string;
+    template: string;
+  }): Promise<SendSMSResult> {
     try {
-      const url = `${this.baseUrl}/${this.apiKey}/verify/lookup.json`;
+      const receptor = this.normalizePhone(phoneNumber);
+      const url      = `${BASE_URL}/${this.apiKey}/verify/lookup.json`;
+      const params   = new URLSearchParams({ receptor, token: otp, template });
 
-      const params = new URLSearchParams({
-        receptor: phoneNumber,
-        token: tokens.token || "",
-        template: template
+      const res  = await fetch(url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body:    params.toString(),
       });
 
-      // Add additional tokens if needed
-      Object.entries(tokens).forEach(([key, value], index) => {
-        if (key !== "token" && index < 2) {
-          // Kavenegar supports token, token2, token3
-          params.append(`token${index + 2}`, value);
-        }
-      });
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: params.toString()
-      });
-
-      const data = await response.json();
+      const data = await res.json();
 
       if (data.return?.status === 200) {
-        return {
-          success: true,
-          messageId: data.entry?.messageid?.toString()
-        };
-      } else {
-        return {
-          success: false,
-          error: data.return?.message || "خطا در ارسال پیامک"
-        };
+        return { success: true, messageId: data.entries?.[0]?.messageid?.toString() };
       }
-    } catch (error: any) {
-      console.error("Kavenegar template API error:", error);
-      return {
-        success: false,
-        error: error.message || "خطا در ارتباط با سرویس پیامک"
-      };
+
+      console.error("Kavenegar template error:", data.return);
+      return { success: false, error: data.return?.message || "خطا در ارسال پیامک" };
+    } catch (err: any) {
+      console.error("Kavenegar template fetch error:", err);
+      return { success: false, error: err.message || "خطا در ارتباط با سرویس پیامک" };
     }
   }
 }
 
-// Create singleton instance
-let kavenegarInstance: KavenegarService | null = null;
+// ── Singleton ──────────────────────────────────────────────────────────────────
+let instance: KavenegarService | null = null;
 
 export function getKavenegarService(): KavenegarService {
-  if (!kavenegarInstance) {
+  if (!instance) {
     const apiKey = process.env.KAVENEGAR_API_KEY || "";
-    const sender = process.env.KAVENEGAR_SENDER || "10004346"; // Default Kavenegar sender
+    const sender = process.env.KAVENEGAR_SENDER  || "10004346";
 
     if (!apiKey) {
-      console.warn("KAVENEGAR_API_KEY not set. SMS functionality will not work.");
+      console.warn("[Kavenegar] KAVENEGAR_API_KEY is not set — SMS will not be sent.");
     }
 
-    kavenegarInstance = new KavenegarService({
-      apiKey,
-      sender
-    });
+    instance = new KavenegarService(apiKey, sender);
   }
-
-  return kavenegarInstance;
+  return instance;
 }
 
-export { KavenegarService, SendOTPParams, SendSMSResponse };
-
-
-
-
+export type { SendSMSResult };

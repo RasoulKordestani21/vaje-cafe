@@ -1,101 +1,74 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  createCustomerOTP,
-  sendCustomerOTPSMS,
-  createOrUpdateCustomer
-} from "@/lib/customerOTPService";
+import { createCustomerOTP, sendCustomerOTPSMS, createOrUpdateCustomer } from "@/lib/customerOTPService";
 
 export async function POST(request: NextRequest) {
   try {
     const { phoneNumber, name } = await request.json();
 
     if (!phoneNumber) {
-      return NextResponse.json(
-        { error: "شماره موبایل الزامی است" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "شماره موبایل الزامی است" }, { status: 400 });
     }
 
-    // Validate phone number format (Iranian mobile: 09xxxxxxxxx)
     const normalizedPhone = phoneNumber.replace(/\D/g, "");
     if (!/^(09|98)\d{9}$/.test(normalizedPhone)) {
       return NextResponse.json(
-        { error: "فرمت شماره موبایل نامعتبر است. لطفا شماره را به صورت 09xxxxxxxxx وارد کنید" },
+        { error: "فرمت شماره موبایل نامعتبر است. لطفاً شماره را به صورت ۰۹xxxxxxxxx وارد کنید" },
         { status: 400 }
       );
     }
 
-    // Create or update customer record (if name provided)
-    if (name && name.trim()) {
-      createOrUpdateCustomer(normalizedPhone, name.trim());
-    } else {
-      createOrUpdateCustomer(normalizedPhone);
-    }
+    // Ensure customer record exists
+    createOrUpdateCustomer(normalizedPhone, name?.trim() || undefined);
 
-    // Generate OTP
+    // Generate OTP (returns test OTP when KAVENEGAR_API_KEY is not set)
     let otp: string;
     let expiresAt: number;
 
     try {
-      const otpResult = createCustomerOTP(normalizedPhone);
-      otp = otpResult.otp;
-      expiresAt = otpResult.expiresAt;
-    } catch (error: any) {
-      if (error.message.includes("تعداد درخواست")) {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 429 }
-        );
+      ({ otp, expiresAt } = createCustomerOTP(normalizedPhone));
+    } catch (err: any) {
+      if (err.message.includes("تعداد درخواست")) {
+        return NextResponse.json({ error: err.message }, { status: 429 });
       }
-      throw error;
+      throw err;
     }
 
-    // Send OTP via SMS (skip if using test OTP)
-    if (otp !== "001234") {
+    const isTestOTP = otp === "1234";
+    const isDev     = process.env.NODE_ENV === "development";
+    const hasKey    = !!process.env.KAVENEGAR_API_KEY;
+
+    // Skip real SMS in dev or when using the fallback test OTP
+    if (!isTestOTP && hasKey) {
       const smsResult = await sendCustomerOTPSMS(normalizedPhone, otp);
 
       if (!smsResult.success) {
-        // If SMS fails but we're in development or using test OTP, still return success
-        if (process.env.NODE_ENV === "development" || !process.env.KAVENEGAR_API_KEY) {
-          return NextResponse.json(
-            {
-              success: true,
-              message: "کد OTP ایجاد شد (حالت تست)",
-              otp: "1234", // Return unpadded version for display
-              expiresAt
-            },
-            { status: 200 }
-          );
-        }
-
+        console.error("[OTP] SMS failed:", smsResult.error);
         return NextResponse.json(
-          { error: smsResult.error || "خطا در ارسال پیامک" },
+          { error: smsResult.error || "خطا در ارسال پیامک. لطفاً دوباره تلاش کنید." },
           { status: 500 }
         );
       }
     }
 
-    // Always return OTP in response for testing (especially when using test OTP)
-    const response: any = {
+    // Build response
+    const response: Record<string, unknown> = {
       success: true,
-      message: otp === "001234" 
-        ? "کد ورود تست: 1234" 
-        : "کد ورود برای شما ارسال شد",
-      expiresAt
+      message: isTestOTP ? "کد ورود تست: 1234" : "کد ورود به شماره شما ارسال شد",
+      expiresAt,
     };
 
-    // Always return OTP for testing (especially when Kavenegar is not configured)
-    if (!process.env.KAVENEGAR_API_KEY || process.env.NODE_ENV === "development" || otp === "001234") {
-      response.otp = "1234"; // Return unpadded version for display
+    // Expose OTP only in dev mode (never in production with a real key)
+    if (isDev || isTestOTP) {
+      response.otp = "1234"; // always show the unpadded form in UI hint
     }
 
     return NextResponse.json(response, { status: 200 });
-  } catch (error: any) {
-    console.error("Request OTP error:", error);
+
+  } catch (err: any) {
+    console.error("[request-otp]", err);
     return NextResponse.json(
-      { error: error.message || "خطای سرور، لطفا دوباره امتحان کنید" },
+      { error: err.message || "خطای سرور، لطفاً دوباره امتحان کنید" },
       { status: 500 }
     );
   }
 }
-

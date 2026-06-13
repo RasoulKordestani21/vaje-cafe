@@ -57,17 +57,22 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
   const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
                 useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
 
-  const digits = value.padEnd(4, "").slice(0, 4).split("");
+  // Always a 4-element array — empty string for unfilled slots
+  const digits = Array.from({ length: 4 }, (_, i) => value[i] ?? "");
 
   const handleChange = (idx: number, char: string) => {
     const d = char.replace(/\D/g, "").slice(-1);
-    const next = digits.map((c, i) => (i === idx ? d : c)).join("").slice(0, 4);
-    onChange(next);
+    const arr = Array.from({ length: 4 }, (_, i) => value[i] ?? "");
+    arr[idx] = d;
+    onChange(arr.join(""));
     if (d && idx < 3) refs[idx + 1].current?.focus();
   };
 
   const handleKey = (idx: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !digits[idx] && idx > 0) {
+      const arr = Array.from({ length: 4 }, (_, i) => value[i] ?? "");
+      arr[idx - 1] = "";
+      onChange(arr.join(""));
       refs[idx - 1].current?.focus();
     }
   };
@@ -87,7 +92,7 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
           type="text"
           inputMode="numeric"
           maxLength={1}
-          value={digits[idx] === " " ? "" : digits[idx]}
+          value={digits[idx]}
           onChange={e => handleChange(idx, e.target.value)}
           onKeyDown={e => handleKey(idx, e)}
           onPaste={handlePaste}
@@ -98,9 +103,7 @@ function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
             isDark
               ? "bg-[#1f2520] border-[#2c3329] text-[#edf2eb]"
               : "bg-[#f9f7f3] border-[#e5e0d8] text-[#111814]",
-            digits[idx] && digits[idx] !== " "
-              ? "border-[#186244]"
-              : ""
+            digits[idx] ? "border-[#186244]" : ""
           )}
         />
       ))}
@@ -231,7 +234,7 @@ export default function CustomerLoginPage() {
   // ── Step meta ──────────────────────────────────────────────────────────────
   const stepMeta = {
     phone:   { title: "ورود / ثبت‌نام",    sub: "شماره موبایل خود را وارد کنید" },
-    otp:     { title: "کد تأیید",           sub: `کد ارسال شده به ${formatPhoneDisplay(phoneNumber)} را وارد کنید` },
+    otp:     { title: "کد تأیید",           sub: "کد ارسال شده را وارد کنید" },
     name:    { title: "خوش آمدید!",        sub: "برای تکمیل ثبت‌نام نام خود را وارد کنید" },
     success: { title: "ورود موفق",          sub: "در حال انتقال به منو..." },
   };
@@ -340,15 +343,12 @@ export default function CustomerLoginPage() {
             <div className="space-y-5">
               <OtpBoxes value={otp} onChange={setOtp} />
 
-              <div className="text-center">
+              <div className="text-center space-y-1">
                 <p className={cn("text-xs", textMuted)}>
-                  کد به {formatPhoneDisplay(phoneNumber)} ارسال شد
+                  کد به شماره زیر ارسال شد
                 </p>
-                <p className={cn(
-                  "text-xs mt-2 px-3 py-1.5 rounded-lg inline-block",
-                  isDark ? "bg-[#1f2520] text-[#8fa688]" : "bg-[#f0ece4] text-[#4b5563]"
-                )}>
-                  کد تست: <span className="font-mono font-bold">1234</span>
+                <p className={cn("text-sm font-mono font-bold tracking-widest", textPrimary)} dir="ltr">
+                  {formatPhoneDisplay(phoneNumber)}
                 </p>
               </div>
 
@@ -372,7 +372,7 @@ export default function CustomerLoginPage() {
 
                 {countdown > 0 ? (
                   <span className={textMuted}>
-                    ارسال مجدد: {toPersianDigits(countdown.toString())}s
+                    {toPersianDigits(String(Math.floor(countdown / 60)).padStart(2, "0"))}:{toPersianDigits(String(countdown % 60).padStart(2, "0"))} زمان باقیمانده
                   </span>
                 ) : (
                   <button

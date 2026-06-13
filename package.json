@@ -31,6 +31,7 @@
     "firebase": "^10.8.1",
     "jalaali-js": "^1.2.8",
     "jalali-moment": "^3.3.11",
+    "kavenegar": "^1.1.4",
     "lucide-react": "^0.344.0",
     "next": "14.1.0",
     "nodemailer": "^7.0.11",

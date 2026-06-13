@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Star, Quote, Loader2 } from "lucide-react";
+import { Star, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatJalaliDate, timestampToJalali } from "@/utils/jalaliDateUtils";
-import { toPersianDigits } from "@/utils/format";
 import Link from "next/link";
 
 interface Review {
@@ -13,9 +12,32 @@ interface Review {
   menu_item_name?: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_profile_picture?: string | null;
   rating: number;
   review_text?: string;
   createdAt: number;
+}
+
+function ReviewAvatar({ review }: { review: Review }) {
+  console.log(review, "this is review data in review avatar");
+  const label = review.customer_name || review.customer_phone || "م";
+  const initial = label.charAt(0);
+  console.log(review, "this is review data ");
+  if (review.customer_profile_picture) {
+    return (
+      <img
+        src={review.customer_profile_picture}
+        alt={label}
+        className="w-12 h-12 rounded-full object-cover border-2 border-coffee-600/40 flex-shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div className="w-12 h-12 bg-coffee-900/30 rounded-full flex items-center justify-center text-coffee-400 flex-shrink-0 text-lg font-bold">
+      {initial}
+    </div>
+  );
 }
 
 const HomepageReviews: React.FC = () => {
@@ -41,10 +63,12 @@ const HomepageReviews: React.FC = () => {
         const reviewsWithNames = (data.ratings || [])
           .slice(0, 6)
           .map((review: any) => {
-            const menuItem = menuItems.find((item: any) => item.id === review.menu_item_id);
+            const menuItem = menuItems.find(
+              (item: any) => item.id === review.menu_item_id
+            );
             return {
               ...review,
-              menu_item_name: menuItem?.name || "محصول",
+              menu_item_name: menuItem?.name || "محصول"
             };
           });
 
@@ -82,24 +106,26 @@ const HomepageReviews: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {reviews.map((review) => (
+          {reviews.map(review => (
             <div
               key={review.id}
               className="bg-neutral-900/50 border border-white/5 rounded-2xl p-6 hover:border-coffee-500/30 transition-all"
             >
               <div className="flex items-start gap-4 mb-4">
-                <div className="w-12 h-12 bg-coffee-900/30 rounded-full flex items-center justify-center text-coffee-400 flex-shrink-0">
-                  <Quote size={24} />
-                </div>
+                <ReviewAvatar review={review} />
                 <div className="flex-1">
                   <div className="flex items-center gap-1 mb-2">
-                    {[1, 2, 3, 4, 5].map((starValue) => (
+                    {[1, 2, 3, 4, 5].map(starValue => (
                       <Star
                         key={starValue}
                         size={14}
-                        fill={review.rating >= starValue ? "currentColor" : "none"}
+                        fill={
+                          review.rating >= starValue ? "currentColor" : "none"
+                        }
                         className={cn(
-                          review.rating >= starValue ? "text-yellow-400" : "text-gray-600"
+                          review.rating >= starValue
+                            ? "text-yellow-400"
+                            : "text-gray-600"
                         )}
                       />
                     ))}
@@ -148,6 +174,3 @@ const HomepageReviews: React.FC = () => {
 };
 
 export default HomepageReviews;
-
-
-

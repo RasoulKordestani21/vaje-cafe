@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customer_id');
 
     let query = `
-      SELECT r.*, c.name as customer_name, c.phone as customer_phone
+      SELECT r.*, c.name as customer_name, c.phone as customer_phone, c.profilePicture as customer_profile_picture
       FROM ratings r
       LEFT JOIN customers c ON r.customer_id = c.id
       WHERE 1=1

@@ -8,9 +8,9 @@ import { getDatabase } from "./database";
 import { getKavenegarService } from "./kavenegarService";
 
 const OTP_EXPIRY_MINUTES = 10;
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 4;
 const RATE_LIMIT_MINUTES = 1; // Can request new OTP every 1 minute
-const TEST_OTP = "001234"; // Padded test OTP (stored as 6 digits)
+const TEST_OTP = "1234"; // Test OTP (4 digits)
 
 interface CustomerOTP {
   id: string;
@@ -139,7 +139,7 @@ export function markCustomerOTPAsUsed(otpId: string): void {
 }
 
 /**
- * Send OTP via SMS
+ * Send OTP via SMS using the Kavenegar lookup template
  */
 export async function sendCustomerOTPSMS(
   phoneNumber: string,
@@ -147,7 +147,12 @@ export async function sendCustomerOTPSMS(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const kavenegar = getKavenegarService();
-    const result = await kavenegar.sendOTP({ phoneNumber, otp });
+    const template  = process.env.KAVENEGAR_OTP_TEMPLATE;
+
+    const result = template
+      ? await kavenegar.sendOTPWithTemplate({ phoneNumber, otp, template })
+      : await kavenegar.sendOTP({ phoneNumber, otp });
+
     return result;
   } catch (error: any) {
     console.error("SMS sending error:", error);
