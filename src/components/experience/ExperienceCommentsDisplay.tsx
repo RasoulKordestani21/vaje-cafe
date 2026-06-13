@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Star, Quote, Loader2 } from "lucide-react";
+import { Star, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatJalaliDate } from "@/utils/jalaliDateUtils";
-import { timestampToJalali } from "@/utils/jalaliDateUtils";
+import { formatJalaliDate, timestampToJalali } from "@/utils/jalaliDateUtils";
 import ExperienceComments from "./ExperienceComments";
 
 interface ExperienceComment {
@@ -13,7 +12,38 @@ interface ExperienceComment {
   rating: number;
   customer_name: string | null;
   customer_phone: string | null;
+  customer_profile_picture?: string | null;
   created_at: string;
+  createdAt?: number;
+}
+
+function CommentAvatar({ comment }: { comment: ExperienceComment }) {
+  const label = comment.customer_name || comment.customer_phone || "م";
+  const initial = label.charAt(0);
+
+  if (comment.customer_profile_picture) {
+    return (
+      <img
+        src={comment.customer_profile_picture}
+        alt={label}
+        className="w-12 h-12 rounded-full object-cover border-2 border-coffee-600/40 flex-shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div className="w-12 h-12 bg-coffee-900/30 rounded-full flex items-center justify-center text-coffee-400 flex-shrink-0 text-lg font-bold">
+      {initial}
+    </div>
+  );
+}
+
+function formatCommentDate(comment: ExperienceComment): string {
+  const ts = comment.createdAt
+    ?? (/^\d+$/.test(comment.created_at)
+      ? parseInt(comment.created_at, 10)
+      : Math.floor(new Date(comment.created_at).getTime() / 1000));
+  return formatJalaliDate(timestampToJalali(ts));
 }
 
 const ExperienceCommentsDisplay: React.FC = () => {
@@ -67,9 +97,7 @@ const ExperienceCommentsDisplay: React.FC = () => {
                 className="bg-neutral-900/50 border border-white/5 rounded-2xl p-6 hover:border-coffee-500/30 transition-all"
               >
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 bg-coffee-900/30 rounded-full flex items-center justify-center text-coffee-400 flex-shrink-0">
-                    <Quote size={24} />
-                  </div>
+                  <CommentAvatar comment={comment} />
                   <div className="flex-1">
                     <div className="flex items-center gap-1 mb-2">
                       {[1, 2, 3, 4, 5].map((starValue) => (
@@ -95,7 +123,7 @@ const ExperienceCommentsDisplay: React.FC = () => {
 
                 <div className="pt-4 border-t border-white/5">
                   <span className="text-xs text-gray-500">
-                    {formatJalaliDate(timestampToJalali(parseInt(comment.created_at)))}
+                    {formatCommentDate(comment)}
                   </span>
                 </div>
               </div>
@@ -113,6 +141,3 @@ const ExperienceCommentsDisplay: React.FC = () => {
 };
 
 export default ExperienceCommentsDisplay;
-
-
-

@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     const isAdmin = authHeader && ensureAdmin(request) === null;
 
     let query = `
-      SELECT * FROM experience_comments
+      SELECT ec.*, c.profilePicture as customer_profile_picture
+      FROM experience_comments ec
+      LEFT JOIN customers c ON ec.customer_id = c.id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -45,8 +47,10 @@ export async function GET(request: NextRequest) {
       ...c,
       rating: Number(c.rating),
       admin_approved: Boolean(c.admin_approved),
+      createdAt: Number(c.created_at),
       created_at: formatTimestamp(c.created_at),
       updated_at: formatTimestamp(c.updated_at),
+      customer_profile_picture: c.customer_profile_picture || null,
     }));
 
     return NextResponse.json({ comments: formattedComments });

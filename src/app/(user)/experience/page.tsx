@@ -14,7 +14,17 @@ interface ExperienceComment {
   rating: number;
   customer_name: string | null;
   customer_phone: string | null;
+  customer_profile_picture?: string | null;
   created_at: string;
+  createdAt?: number;
+}
+
+function formatCommentDate(comment: ExperienceComment): string {
+  const ts = comment.createdAt
+    ?? (/^\d+$/.test(comment.created_at)
+      ? parseInt(comment.created_at, 10)
+      : Math.floor(new Date(comment.created_at).getTime() / 1000));
+  return formatJalaliDate(timestampToJalali(ts));
 }
 
 // ─── Star row helper ───────────────────────────────────────────────────────────
@@ -78,16 +88,24 @@ function CommentCard({ comment, isDark }: { comment: ExperienceComment; isDark: 
       {/* header */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
-            isDark ? "bg-[#1f2e25] text-[#4ade80]" : "bg-[#e6f4ec] text-[#186244]"
-          )}>
-            {authorLabel.slice(0, 1)}
-          </div>
+          {comment.customer_profile_picture ? (
+            <img
+              src={comment.customer_profile_picture}
+              alt={authorLabel}
+              className="w-9 h-9 rounded-full object-cover border-2 border-[#186244]/40 shrink-0"
+            />
+          ) : (
+            <div className={cn(
+              "w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0",
+              isDark ? "bg-[#1f2e25] text-[#4ade80]" : "bg-[#e6f4ec] text-[#186244]"
+            )}>
+              {authorLabel.slice(0, 1)}
+            </div>
+          )}
           <div>
             <p className={cn("text-sm font-semibold leading-none mb-1", text)}>{authorLabel}</p>
             <p className={cn("text-[10px]", muted)}>
-              {formatJalaliDate(timestampToJalali(parseInt(comment.created_at)))}
+              {formatCommentDate(comment)}
             </p>
           </div>
         </div>
