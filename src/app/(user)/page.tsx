@@ -1,12 +1,20 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import Link from "next/link";
-import { ArrowLeft, Coffee, Star, MapPin, X } from "lucide-react";
+import {
+  ArrowLeft, X, Star, MapPin, Clock, Shield,
+  Headphones, Truck, ChevronLeft,
+} from "lucide-react";
 import { ToastContainer, useToast } from "@/components/ui/toast";
 import HomepageReviews from "@/components/ratings/HomepageReviews";
 import ExperienceCommentsDisplay from "@/components/experience/ExperienceCommentsDisplay";
+import { ThemeContext } from "@/app/providers";
+import { CATEGORIES, MenuItem } from "@/types";
+import { formatToman } from "@/utils/format";
+import { cn } from "@/lib/utils";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface SiteSettings {
   hero_title?: string;
   hero_subtitle?: string;
@@ -26,239 +34,376 @@ interface Banner {
   image_url: string;
   type: string;
   priority: number;
+  is_active: number;
+  start_date?: number;
+  end_date?: number;
 }
 
-export default function Home() {
-  const [settings, setSettings] = useState<SiteSettings>({});
-  const [banners, setBanners] = useState<Banner[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
-  const { toasts, addToast, removeToast } = useToast();
-  const hasCheckedStatus = React.useRef(false);
+// ─── Category meta ────────────────────────────────────────────────────────────
+const CAT_ICONS: Record<string, string> = {
+  "همه":            "☕",
+  "اسپرسو":         "☕",
+  "قهوه دمی":       "🫖",
+  "نوشیدنی سرد":    "🧊",
+  "نوشیدنی خاص":    "🥤",
+  "کیک و دسر":      "🍰",
+};
 
+// ─── Info blocks ──────────────────────────────────────────────────────────────
+const INFO_BLOCKS = [
+  { icon: Truck,       title: "تحویل سریع",         desc: "در کوتاه‌ترین زمان" },
+  { icon: Headphones,  title: "پشتیبانی ۲۴ ساعته",  desc: "همیشه در دسترس" },
+  { icon: Shield,      title: "ضمانت کیفیت",         desc: "بهترین دانه‌های قهوه" },
+  { icon: Clock,       title: "سرویس ۷ روزه",        desc: "همه روزه باز هستیم" },
+];
+
+// ─── Hero image (fallback stock photo) ───────────────────────────────────────
+const HERO_IMG =
+  "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=900&auto=format&fit=crop&q=80";
+
+// ═════════════════════════════════════════════════════════════════════════════
+export default function Home() {
+  const { isDark } = useContext(ThemeContext);
+
+  const [settings, setSettings]               = useState<SiteSettings>({});
+  const [banners, setBanners]                 = useState<Banner[]>([]);
+  const [featuredItems, setFeaturedItems]     = useState<MenuItem[]>([]);
+  const [activeCategory, setActiveCategory]   = useState<string>("همه");
+  const [loading, setLoading]                 = useState(true);
+  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
+  const { toasts, addToast, removeToast }     = useToast();
+  const hasCheckedStatus                      = React.useRef(false);
+
+  // ── Toast: manually-closed cafe ───────────────────────────────────────────
   useEffect(() => {
     if (hasCheckedStatus.current) return;
-
-    const checkSiteStatus = async () => {
-      try {
-        const response = await fetch("/api/working-hours");
-        if (response.ok) {
-          const data = await response.json();
-          if (data.siteStatus?.is_manually_closed === 1) {
-            hasCheckedStatus.current = true;
-            const closedUntil = data.siteStatus.closed_until;
-            const reason = data.siteStatus.reason || "";
-
-            if (closedUntil) {
-              const closedUntilDate = new Date(closedUntil * 1000);
-              const dateStr = closedUntilDate.toLocaleDateString("fa-IR");
-              const timeStr = closedUntilDate.toLocaleTimeString("fa-IR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              addToast(
-                `کافه تا ${dateStr} ساعت ${timeStr} ${reason ? `(${reason})` : ""} بسته است.`,
-                "warning",
-                10000
-              );
-            } else {
-              addToast(
-                `کافه به صورت موقت بسته است. ${reason ? `(${reason})` : ""}`,
-                "warning",
-                10000
-              );
-            }
+    fetch("/api/working-hours")
+      .then(r => r.json())
+      .then(data => {
+        if (data.siteStatus?.is_manually_closed === 1) {
+          hasCheckedStatus.current = true;
+          const closedUntil = data.siteStatus.closed_until;
+          const reason      = data.siteStatus.reason || "";
+          if (closedUntil) {
+            const d    = new Date(closedUntil * 1000);
+            const date = d.toLocaleDateString("fa-IR");
+            const time = d.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
+            addToast(`کافه تا ${date} ساعت ${time} ${reason ? `(${reason})` : ""} بسته است.`, "warning", 10000);
+          } else {
+            addToast(`کافه به صورت موقت بسته است. ${reason ? `(${reason})` : ""}`, "warning", 10000);
           }
         }
-      } catch (err) {
-        console.error("Failed to check site status:", err);
-      }
-    };
-
-    checkSiteStatus();
+      })
+      .catch(() => {});
   }, []);
 
+  // ── Fetch settings, banners, menu ─────────────────────────────────────────
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings/public").then((res) => res.json()),
-      fetch("/api/banners?activeOnly=true").then((res) => res.json()),
+      fetch("/api/settings/public").then(r => r.json()),
+      fetch("/api/banners?activeOnly=true").then(r => r.json()),
+      fetch("/api/menu").then(r => r.json()),
     ])
-      .then(([settingsData, bannersData]) => {
-        if (settingsData.settings) {
-          setSettings(settingsData.settings);
-        }
-        if (bannersData.banners) {
+      .then(([sd, bd, md]) => {
+        if (sd.settings) setSettings(sd.settings);
+
+        if (bd.banners) {
           const now = Math.floor(Date.now() / 1000);
-          const activeBanners = bannersData.banners
-            .filter(
-              (b: Banner & { start_date?: number; end_date?: number; is_active: number }) => {
+          setBanners(
+            bd.banners
+              .filter((b: Banner) => {
                 if (b.is_active === 0) return false;
                 if (b.start_date && b.start_date > now) return false;
                 if (b.end_date && b.end_date < now) return false;
                 return true;
-              }
-            )
-            .sort((a: Banner, b: Banner) => b.priority - a.priority);
-          setBanners(activeBanners);
+              })
+              .sort((a: Banner, b: Banner) => b.priority - a.priority)
+          );
+        }
+
+        if (Array.isArray(md)) {
+          const featured = md
+            .filter((i: MenuItem) => i.available && (i.is_pinned || i.is_suggested))
+            .slice(0, 8);
+          setFeaturedItems(featured.length ? featured : md.filter((i: MenuItem) => i.available).slice(0, 6));
         }
       })
-      .catch((err) => console.error("Failed to fetch data:", err))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  // ── Visit tracker ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const hasVisited = sessionStorage.getItem("vaje_visited");
-    if (!hasVisited) {
+    if (!sessionStorage.getItem("vaje_visited")) {
       fetch("/api/stats", {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "visit",
-          data: { page: "home" },
-        }),
-      }).catch((err) => console.error("Failed to record visit:", err));
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "visit", data: { page: "home" } }),
+      }).catch(() => {});
       sessionStorage.setItem("vaje_visited", "true");
     }
   }, []);
 
-  const siteName = settings.site_name || "کافه واژه";
-  const heroTitle = settings.hero_title || "حس‌های خود را بیدار کنید";
-  const heroSubtitle =
-    settings.hero_subtitle ||
-    "دانه‌های مرغوب، باریستای حرفه‌ای و فضایی آرام برای لحظه‌های خوب شما.";
-  const address =
-    settings.footer_address ||
-    "اسدآباد - خیابان صاحب‌زمان شرقی - دور میدان نون و قلم";
+  // ── Derived values ────────────────────────────────────────────────────────
+  const siteName   = settings.site_name   || "کافه واژه";
+  const heroTitle  = settings.hero_title  || "به کافه واژه خوش آمدید";
+  const heroSub    = settings.hero_subtitle || "طعم واقعی قهوه و لحظات ناب را\nدر محیطی آرام تجربه کنید.";
+  const address    = settings.footer_address || "اسدآباد - خیابان صاحب‌زمان شرقی - دور میدان نون و قلم";
+  const activeBanner = banners.find(b => !dismissedBanners.has(b.id));
 
-  const features = [
-    {
-      icon: Coffee,
-      title: settings.feature_1_title || "دانه‌های تخصصی",
-      description:
-        settings.feature_1_description ||
-        "برشته‌کاری دقیق با بهترین دانه‌های قهوه.",
-    },
-    {
-      icon: Star,
-      title: settings.feature_2_title || "باریستاهای حرفه‌ای",
-      description:
-        settings.feature_2_description ||
-        "تیمی متخصص که طعم را با دقت می‌سازد.",
-    },
-    {
-      icon: MapPin,
-      title: settings.feature_3_title || "فضای آرام",
-      description:
-        settings.feature_3_description ||
-        "محیطی مناسب برای استراحت و گفتگو.",
-    },
-  ];
+  // ── Category-filtered items ───────────────────────────────────────────────
+  const categoryItems = activeCategory === "همه"
+    ? featuredItems
+    : featuredItems.filter(i => i.category === activeCategory);
+  const displayItems = categoryItems.length ? categoryItems : featuredItems;
 
-  const activeBanner = banners.find((b) => !dismissedBanners.has(b.id));
+  // ── Surface ───────────────────────────────────────────────────────────────
+  const bg      = isDark ? "bg-[#0f120e]"  : "bg-[#faf8f4]";
+  const surface = isDark ? "bg-[#181c17]"  : "bg-white";
+  const border  = isDark ? "border-[#2c3329]" : "border-[#e5e0d8]";
+  const text    = isDark ? "text-[#edf2eb]"   : "text-[#111814]";
+  const muted   = isDark ? "text-[#8fa688]"   : "text-[#4b5563]";
+  const mutedbg = isDark ? "bg-[#1f2520]"     : "bg-[#f0ece4]";
 
   return (
-    <div className="flex flex-col bg-neutral-950 text-white" dir="rtl">
+    <div className={cn("flex flex-col min-h-screen", bg, text)} dir="rtl">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
+      {/* ── Announcement banner ──────────────────────────────────────────── */}
       {activeBanner && (
-        <div className="border-b border-white/10 bg-neutral-900/90">
-          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-            <p className="flex-1 text-sm text-neutral-200 leading-relaxed">
+        <div className={cn("border-b", border, surface)}>
+          <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center gap-3">
+            <span className={cn("w-1.5 h-1.5 rounded-full bg-[#186244] shrink-0")} />
+            <p className={cn("flex-1 text-sm leading-relaxed", muted)}>
               {activeBanner.title}
             </p>
             <button
-              onClick={() =>
-                setDismissedBanners((prev) => new Set([...prev, activeBanner.id]))
-              }
-              className="p-1.5 text-neutral-400 hover:text-white rounded-md transition-colors"
-              aria-label="بستن اطلاعیه"
+              onClick={() => setDismissedBanners(p => new Set([...p, activeBanner.id]))}
+              className={cn("p-1 rounded-md transition-colors", muted, "hover:text-current")}
+              aria-label="بستن"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           </div>
         </div>
       )}
 
-      <section className="relative px-4 pt-8 pb-20 md:pt-12 md:pb-28">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(120,53,15,0.18),_transparent_55%)]" />
+      {/* ══════════════════════════════════════════════════════════════════════
+          HERO — split layout
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section className="flex flex-col md:flex-row min-h-[82vh] md:min-h-[78vh]">
 
-        <div className="relative max-w-2xl mx-auto text-center">
-          <p className="text-coffee-400 text-sm mb-4">{siteName}</p>
+        {/* Text panel (right in RTL → renders second in DOM = LEFT visually)
+            We put the image first in DOM so in RTL flex-row it ends up on the right */}
+
+        {/* ── Coffee image (right side in RTL) ──────────────────────────── */}
+        <div className="relative md:w-1/2 h-64 md:h-auto overflow-hidden order-first">
+          <img
+            src={HERO_IMG}
+            alt="قهوه کافه واژه"
+            className="w-full h-full object-cover"
+          />
+          {/* overlay */}
+          <div className={cn(
+            "absolute inset-0",
+            isDark
+              ? "bg-gradient-to-l from-[#0f120e] via-[#0f120e]/40 to-transparent"
+              : "bg-gradient-to-l from-[#faf8f4] via-[#faf8f4]/30 to-transparent"
+          )} />
+        </div>
+
+        {/* ── Text (left side in RTL) ───────────────────────────────────── */}
+        <div className={cn(
+          "relative md:w-1/2 flex flex-col justify-center px-8 sm:px-12 md:px-16 py-16",
+          isDark ? "bg-[#0f120e]" : "bg-[#faf8f4]"
+        )}>
+          {/* brand label */}
+          <p className="text-[#186244] text-sm font-semibold mb-4 tracking-wide">
+            ✦ {siteName}
+          </p>
 
           {loading ? (
             <div className="space-y-4 animate-pulse">
-              <div className="h-10 bg-white/10 rounded-lg mx-auto w-3/4" />
-              <div className="h-5 bg-white/5 rounded-lg mx-auto w-full max-w-md" />
+              <div className={cn("h-12 rounded-xl w-4/5", mutedbg)} />
+              <div className={cn("h-5 rounded-lg w-full max-w-sm", mutedbg)} />
+              <div className={cn("h-5 rounded-lg w-3/4", mutedbg)} />
             </div>
           ) : (
             <>
-              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-snug mb-5">
+              <h1 className={cn("text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-5", text)}>
                 {heroTitle}
               </h1>
-              <p className="text-neutral-400 text-base md:text-lg leading-relaxed mb-10">
-                {heroSubtitle}
+              <p className={cn("text-base md:text-lg leading-loose whitespace-pre-line mb-10", muted)}>
+                {heroSub}
               </p>
             </>
           )}
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Link
               href="/menu"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 bg-coffee-600 hover:bg-coffee-500 text-white rounded-xl font-medium transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold text-white bg-[#186244] hover:bg-[#1f7a56] transition-all shadow-soft hover:shadow-lg"
             >
               مشاهده منو
-              <ArrowLeft size={18} />
+              <ArrowLeft size={17} />
             </Link>
             <a
               href="#visit"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3 text-neutral-300 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-colors"
+              className={cn(
+                "inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold border transition-all",
+                isDark
+                  ? "border-[#2c3329] text-[#8fa688] hover:bg-[#1f2520] hover:text-[#edf2eb]"
+                  : "border-[#e5e0d8] text-[#4b5563] hover:bg-[#f0ece4] hover:text-[#111814]"
+              )}
             >
+              <MapPin size={16} />
               آدرس ما
-              <MapPin size={18} />
             </a>
           </div>
         </div>
       </section>
 
-      <section className="border-t border-white/5 py-14 md:py-16">
-        <div className="max-w-3xl mx-auto px-4">
-          <ul className="divide-y divide-white/5">
-            {features.map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <li key={index} className="flex items-start gap-4 py-5 first:pt-0 last:pb-0">
-                  <div className="mt-0.5 w-10 h-10 shrink-0 rounded-lg bg-coffee-900/40 flex items-center justify-center text-coffee-400">
-                    <Icon size={20} strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium mb-1">{feature.title}</h3>
-                    <p className="text-sm text-neutral-400 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+      {/* ══════════════════════════════════════════════════════════════════════
+          CATEGORY TABS
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section className={cn("sticky top-[4.5rem] sm:top-[5rem] z-30 border-b", border, isDark ? "bg-[#141a12]/95 backdrop-blur-xl" : "bg-white/95 backdrop-blur-xl")}>
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-3">
+            {/* "همه" tab */}
+            <CategoryTab
+              label="همه"
+              icon="☕"
+              active={activeCategory === "همه"}
+              isDark={isDark}
+              onClick={() => setActiveCategory("همه")}
+            />
+            {CATEGORIES.map(cat => (
+              <CategoryTab
+                key={cat}
+                label={cat}
+                icon={CAT_ICONS[cat] || "☕"}
+                active={activeCategory === cat}
+                isDark={isDark}
+                onClick={() => setActiveCategory(cat)}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
+      {/* ══════════════════════════════════════════════════════════════════════
+          FEATURED PRODUCTS
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section className="py-10 md:py-14">
+        <div className="max-w-6xl mx-auto px-4">
+          {/* header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p className={cn("text-xs font-semibold uppercase tracking-widest mb-1", "text-[#186244]")}>
+                منتخب امروز
+              </p>
+              <h2 className={cn("text-xl sm:text-2xl font-bold", text)}>
+                محصولات ویژه
+              </h2>
+            </div>
+            <Link
+              href="/menu"
+              className={cn(
+                "flex items-center gap-1 text-sm font-medium transition-colors",
+                "text-[#186244] hover:text-[#1f7a56]"
+              )}
+            >
+              مشاهده همه
+              <ChevronLeft size={16} />
+            </Link>
+          </div>
+
+          {/* Horizontal product scroll */}
+          {loading ? (
+            <div className="flex gap-4 overflow-hidden">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className={cn("shrink-0 w-48 sm:w-52 rounded-2xl animate-pulse", mutedbg)}
+                  style={{ height: 260 }}
+                />
+              ))}
+            </div>
+          ) : displayItems.length === 0 ? (
+            <p className={cn("py-10 text-center text-sm", muted)}>
+              محصولی یافت نشد
+            </p>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2">
+              {displayItems.map(item => (
+                <ProductCard
+                  key={item.id}
+                  item={item}
+                  isDark={isDark}
+                  surface={surface}
+                  border={border}
+                  text={text}
+                  muted={muted}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          INFO BLOCKS
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section className={cn("border-t border-b py-8 md:py-10", border, isDark ? "bg-[#141a12]" : "bg-white")}>
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            {INFO_BLOCKS.map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="flex items-start gap-3">
+                <div className={cn(
+                  "mt-0.5 w-9 h-9 shrink-0 rounded-xl flex items-center justify-center",
+                  isDark ? "bg-[#1f2520] text-[#4ade80]" : "bg-[#dcfce7] text-[#186244]"
+                )}>
+                  <Icon size={18} strokeWidth={1.8} />
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", text)}>{title}</p>
+                  <p className={cn("text-xs mt-0.5", muted)}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Reviews ──────────────────────────────────────────────────────────── */}
       <HomepageReviews />
+
+      {/* ── Experience Comments ───────────────────────────────────────────────── */}
       <ExperienceCommentsDisplay />
 
-      <section id="visit" className="border-t border-white/5 py-14 md:py-16">
+      {/* ══════════════════════════════════════════════════════════════════════
+          VISIT / CTA
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section
+        id="visit"
+        className={cn("border-t py-14 md:py-20", border)}
+      >
         <div className="max-w-2xl mx-auto px-4 text-center">
-          <h2 className="font-serif text-2xl md:text-3xl text-white mb-3">
+          <span className={cn(
+            "inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest mb-4",
+            isDark ? "bg-[#1f2520] text-[#4ade80]" : "bg-[#dcfce7] text-[#186244]"
+          )}>
+            بیایید و بچشید
+          </span>
+          <h2 className={cn("text-2xl sm:text-3xl font-black mb-3", text)}>
             به ما سر بزنید
           </h2>
-          <p className="text-neutral-400 text-sm md:text-base leading-relaxed whitespace-pre-line mb-8">
+          <p className={cn("text-sm md:text-base leading-loose whitespace-pre-line mb-8", muted)}>
             {address}
           </p>
           <Link
             href="/menu"
-            className="inline-flex items-center gap-2 text-coffee-400 hover:text-coffee-300 text-sm font-medium transition-colors"
+            className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-sm font-bold text-white bg-[#186244] hover:bg-[#1f7a56] transition-all shadow-soft"
           >
             مشاهده منوی کامل
             <ArrowLeft size={16} />
@@ -266,5 +411,109 @@ export default function Home() {
         </div>
       </section>
     </div>
+  );
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function CategoryTab({
+  label, icon, active, isDark, onClick,
+}: {
+  label: string; icon: string; active: boolean;
+  isDark: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all duration-150 whitespace-nowrap",
+        active
+          ? "bg-[#186244] text-white shadow-sm"
+          : isDark
+            ? "text-[#8fa688] hover:bg-[#1f2520] hover:text-[#edf2eb]"
+            : "text-[#4b5563] hover:bg-[#f0ece4] hover:text-[#111814]"
+      )}
+    >
+      <span className="text-base leading-none">{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function StarRow({ rating }: { rating?: number }) {
+  const r = rating ?? 4;
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(v => (
+        <Star
+          key={v}
+          size={11}
+          className={r >= v ? "text-[#eab308]" : "text-gray-400"}
+          fill={r >= v ? "currentColor" : "none"}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ProductCard({
+  item, surface, border, text,
+}: {
+  item: MenuItem; isDark: boolean;
+  surface: string; border: string; text: string; muted: string;
+}) {
+  const imgSrc = item.imageUrl || `https://picsum.photos/300/200?random=${item.id}`;
+
+  return (
+    <Link
+      href="/menu"
+      className={cn(
+        "group shrink-0 w-44 sm:w-48 flex flex-col rounded-2xl border overflow-hidden transition-all duration-200",
+        "hover:-translate-y-1 hover:shadow-lg",
+        surface, border
+      )}
+    >
+      {/* image */}
+      <div className="relative h-36 overflow-hidden">
+        <img
+          src={imgSrc}
+          alt={item.name}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={e => {
+            (e.target as HTMLImageElement).src = `https://picsum.photos/300/200?random=${item.id}`;
+          }}
+        />
+        {item.is_pinned && (
+          <span className="absolute top-2 right-2 bg-[#186244] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            ویژه
+          </span>
+        )}
+        {item.is_suggested && !item.is_pinned && (
+          <span className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            پیشنهاد
+          </span>
+        )}
+      </div>
+
+      {/* info */}
+      <div className="p-3 flex flex-col gap-1.5 flex-1">
+        <p className={cn("text-sm font-semibold leading-snug line-clamp-1", text)}>
+          {item.name}
+        </p>
+        <StarRow />
+        <p className={cn("text-[11px] mt-auto font-bold", "text-[#186244]")}>
+          {formatToman(item.price)}
+        </p>
+      </div>
+
+      {/* add button */}
+      <div className="px-3 pb-3">
+        <div className={cn(
+          "w-full flex items-center justify-center gap-1 rounded-full py-1.5 text-xs font-semibold text-white bg-[#186244] group-hover:bg-[#1f7a56] transition-colors"
+        )}>
+          افزودن به سفارش
+        </div>
+      </div>
+    </Link>
   );
 }

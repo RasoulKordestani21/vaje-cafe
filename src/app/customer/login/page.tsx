@@ -1,87 +1,162 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useContext, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Phone, User, ArrowLeft, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Phone, User, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 import { toPersianDigits } from "@/utils/format";
 import { useCustomer } from "@/context/CustomerContext";
+import { ThemeContext } from "@/app/providers";
+import { cn } from "@/lib/utils";
 
 type Step = "phone" | "otp" | "name" | "success";
 
-export default function CustomerLoginPage() {
-  const router = useRouter();
-  const { login } = useCustomer();
-  const [step, setStep] = useState<Step>("phone");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [otp, setOtp] = useState("");
-  const [name, setName] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(0);
+const BRAND_GREEN = "#186244";
 
-  // Countdown timer for OTP resend
-  React.useEffect(() => {
+// ─── Minimal input ────────────────────────────────────────────────────────────
+function VajeInput({
+  id, value, onChange, placeholder, type = "text", dir, icon, className, autoFocus,
+}: {
+  id?: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  type?: string; dir?: "ltr" | "rtl"; icon?: React.ReactNode;
+  className?: string; autoFocus?: boolean;
+}) {
+  const { isDark } = useContext(ThemeContext);
+  return (
+    <div className="relative">
+      {icon && (
+        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#186244] pointer-events-none">
+          {icon}
+        </span>
+      )}
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        dir={dir}
+        autoFocus={autoFocus}
+        autoComplete="off"
+        className={cn(
+          "w-full rounded-xl border px-3.5 py-3 text-sm outline-none transition-all",
+          "focus:ring-2 focus:ring-[#186244]/30 focus:border-[#186244]",
+          icon ? "pr-10" : "",
+          isDark
+            ? "bg-[#1f2520] border-[#2c3329] text-[#edf2eb] placeholder:text-[#556b52]"
+            : "bg-[#f9f7f3] border-[#e5e0d8] text-[#111814] placeholder:text-[#9ca3af]",
+          className
+        )}
+      />
+    </div>
+  );
+}
+
+// ─── OTP box — four separate 1-char inputs ─────────────────────────────────────
+function OtpBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { isDark } = useContext(ThemeContext);
+  const refs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null),
+                useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+
+  const digits = value.padEnd(4, "").slice(0, 4).split("");
+
+  const handleChange = (idx: number, char: string) => {
+    const d = char.replace(/\D/g, "").slice(-1);
+    const next = digits.map((c, i) => (i === idx ? d : c)).join("").slice(0, 4);
+    onChange(next);
+    if (d && idx < 3) refs[idx + 1].current?.focus();
+  };
+
+  const handleKey = (idx: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !digits[idx] && idx > 0) {
+      refs[idx - 1].current?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4);
+    if (pasted) { onChange(pasted); refs[Math.min(pasted.length, 3)].current?.focus(); }
+    e.preventDefault();
+  };
+
+  return (
+    <div className="flex gap-2.5 justify-center" dir="ltr">
+      {[0, 1, 2, 3].map(idx => (
+        <input
+          key={idx}
+          ref={refs[idx]}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={digits[idx] === " " ? "" : digits[idx]}
+          onChange={e => handleChange(idx, e.target.value)}
+          onKeyDown={e => handleKey(idx, e)}
+          onPaste={handlePaste}
+          autoFocus={idx === 0}
+          className={cn(
+            "w-14 h-14 rounded-xl border text-center text-2xl font-bold outline-none transition-all",
+            "focus:ring-2 focus:ring-[#186244]/30 focus:border-[#186244]",
+            isDark
+              ? "bg-[#1f2520] border-[#2c3329] text-[#edf2eb]"
+              : "bg-[#f9f7f3] border-[#e5e0d8] text-[#111814]",
+            digits[idx] && digits[idx] !== " "
+              ? "border-[#186244]"
+              : ""
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+export default function CustomerLoginPage() {
+  const router        = useRouter();
+  const { login }     = useCustomer();
+  const { isDark }    = useContext(ThemeContext);
+
+  const [step, setStep]               = useState<Step>("phone");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otp, setOtp]                 = useState("");
+  const [name, setName]               = useState("");
+  const [isLoading, setIsLoading]     = useState(false);
+  const [error, setError]             = useState("");
+  const [countdown, setCountdown]     = useState(0);
+
+  useEffect(() => {
     if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+      return () => clearTimeout(t);
     }
   }, [countdown]);
 
-  const normalizePhone = (phone: string): string => {
-    return phone.replace(/\D/g, "");
-  };
-
-  const formatPhoneDisplay = (phone: string): string => {
-    const normalized = normalizePhone(phone);
-    if (normalized.length <= 4) return normalized;
-    if (normalized.length <= 7)
-      return `${normalized.slice(0, 4)} ${normalized.slice(4)}`;
-    if (normalized.length <= 11)
-      return `${normalized.slice(0, 4)} ${normalized.slice(4, 7)} ${normalized.slice(7)}`;
-    return normalized;
+  const normalizePhone = (p: string) => p.replace(/\D/g, "");
+  const formatPhoneDisplay = (p: string) => {
+    const n = normalizePhone(p);
+    if (n.length <= 4) return n;
+    if (n.length <= 7) return `${n.slice(0, 4)} ${n.slice(4)}`;
+    return `${n.slice(0, 4)} ${n.slice(4, 7)} ${n.slice(7)}`;
   };
 
   const handleRequestOTP = async () => {
     setError("");
     setIsLoading(true);
-
     try {
-      const normalizedPhone = normalizePhone(phoneNumber);
-      if (!/^(09|98)\d{9}$/.test(normalizedPhone)) {
-        setError("فرمت شماره موبایل نامعتبر است. لطفا شماره را به صورت 09xxxxxxxxx وارد کنید");
-        setIsLoading(false);
+      const n = normalizePhone(phoneNumber);
+      if (!/^(09|98)\d{9}$/.test(n)) {
+        setError("شماره موبایل نامعتبر است (مثال: ۰۹۱۲۳۴۵۶۷۸۹)");
         return;
       }
-
-      const response = await fetch("/api/customer/auth/request-otp", {
+      const res  = await fetch("/api/customer/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber: normalizedPhone })
+        body: JSON.stringify({ phoneNumber: n }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "خطا در ارسال کد");
-        setIsLoading(false);
-        return;
-      }
-
-      setCountdown(120); // 2 minutes countdown
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "خطا در ارسال کد"); return; }
+      setCountdown(120);
       setStep("otp");
-
-      // Show OTP if provided (for testing)
-      if (data.otp) {
-        console.log("OTP Code:", data.otp);
-        // OTP is displayed in the UI below the input field
-      }
-    } catch (error: any) {
+    } catch {
       setError("خطا در ارتباط با سرور");
-      console.error("Request OTP error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -90,54 +165,30 @@ export default function CustomerLoginPage() {
   const handleVerifyOTP = async () => {
     setError("");
     setIsLoading(true);
-
     try {
-      // Accept both 4-digit test code and 6-digit codes
-      const normalizedOtp = otp.replace(/\D/g, "");
-      if (!/^\d{4}$/.test(normalizedOtp) && !/^\d{6}$/.test(normalizedOtp)) {
-        setError("کد OTP باید ۴ یا ۶ رقم باشد");
-        setIsLoading(false);
+      const code = otp.replace(/\D/g, "");
+      if (!/^\d{4}$/.test(code) && !/^\d{6}$/.test(code)) {
+        setError("کد وارد شده نادرست است");
         return;
       }
-
-      const normalizedPhone = normalizePhone(phoneNumber);
-      const response = await fetch("/api/customer/auth/verify-otp", {
+      const n   = normalizePhone(phoneNumber);
+      const res = await fetch("/api/customer/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // Include cookies to receive the session cookie
-        body: JSON.stringify({
-          phoneNumber: normalizedPhone,
-          otp,
-          name: name.trim() || undefined
-        })
+        credentials: "include",
+        body: JSON.stringify({ phoneNumber: n, otp: code, name: name.trim() || undefined }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "کد OTP نامعتبر است");
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if this is a signup flow (customer needs to provide name)
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "کد نامعتبر است"); return; }
       if (data.isSignup && !data.customer.name && !name.trim()) {
-        // This is a signup - go to name collection step
-        // Cookie is already set from verify-otp response
         setStep("name");
-        setIsLoading(false);
         return;
       }
-
-      // This is a login (customer already has name) - update context and redirect
       login(data.customer);
       setStep("success");
-      setTimeout(() => {
-        router.push("/menu");
-      }, 2000);
-    } catch (error: any) {
+      setTimeout(() => router.push("/menu"), 1800);
+    } catch {
       setError("خطا در ارتباط با سرور");
-      console.error("Verify OTP error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -146,238 +197,234 @@ export default function CustomerLoginPage() {
   const handleSubmitName = async () => {
     setError("");
     setIsLoading(true);
-
     try {
-      if (!name.trim()) {
-        setError("لطفا نام خود را وارد کنید");
-        setIsLoading(false);
-        return;
-      }
-
-      const normalizedPhone = normalizePhone(phoneNumber);
-
-      // Complete signup by adding name (uses session from OTP verification)
-      const response = await fetch("/api/customer/auth/complete-signup", {
+      if (!name.trim()) { setError("لطفاً نام خود را وارد کنید"); return; }
+      const n   = normalizePhone(phoneNumber);
+      const res = await fetch("/api/customer/auth/complete-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // Include cookies for session authentication
-        body: JSON.stringify({
-          name: name.trim(),
-          phoneNumber: normalizedPhone
-        })
+        credentials: "include",
+        body: JSON.stringify({ name: name.trim(), phoneNumber: n }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || "خطا در ثبت اطلاعات");
-        setIsLoading(false);
-        return;
-      }
-
-      // Update customer context with new name
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "خطا در ثبت اطلاعات"); return; }
       login(data.customer);
-
       setStep("success");
-      setTimeout(() => {
-        router.push("/menu");
-      }, 2000);
-    } catch (error: any) {
+      setTimeout(() => router.push("/menu"), 1800);
+    } catch {
       setError("خطا در ارتباط با سرور");
-      console.error("Submit name error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ── Surfaces ──────────────────────────────────────────────────────────────
+  const pageBg = isDark
+    ? "bg-[#0f120e]"
+    : "bg-[#faf8f4]";
+  const cardBg = isDark
+    ? "bg-[#141a12] border-[#2c3329]"
+    : "bg-white border-[#e5e0d8]";
+  const textPrimary = isDark ? "text-[#edf2eb]" : "text-[#111814]";
+  const textMuted   = isDark ? "text-[#8fa688]"  : "text-[#6b7280]";
+
+  // ── Step meta ──────────────────────────────────────────────────────────────
+  const stepMeta = {
+    phone:   { title: "ورود / ثبت‌نام",    sub: "شماره موبایل خود را وارد کنید" },
+    otp:     { title: "کد تأیید",           sub: `کد ارسال شده به ${formatPhoneDisplay(phoneNumber)} را وارد کنید` },
+    name:    { title: "خوش آمدید!",        sub: "برای تکمیل ثبت‌نام نام خود را وارد کنید" },
+    success: { title: "ورود موفق",          sub: "در حال انتقال به منو..." },
+  };
+
+  const submitBtn = (label: string, onClick: () => void, disabled: boolean) => (
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className={cn(
+        "w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white",
+        "bg-[#186244] hover:bg-[#1f7a56] active:scale-[0.98] transition-all",
+        "disabled:opacity-50 disabled:cursor-not-allowed"
+      )}
+    >
+      {isLoading
+        ? <><Loader2 size={16} className="animate-spin" /> در حال پردازش...</>
+        : label}
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-coffee-900 via-coffee-800 to-neutral-900 flex items-center justify-center p-4" dir="rtl">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">ورود / ثبت‌نام</CardTitle>
-          <CardDescription>
-            {step === "phone" && "شماره موبایل خود را وارد کنید"}
-            {step === "otp" && "کد ارسال شده به شماره موبایل خود را وارد کنید"}
-            {step === "name" && "برای تکمیل ثبت‌نام، لطفا نام خود را وارد کنید"}
-            {step === "success" && "ورود موفق! در حال انتقال..."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <div className={cn("min-h-screen flex items-center justify-center p-4", pageBg)} dir="rtl">
+
+      {/* ── Card ──────────────────────────────────────────────────────── */}
+      <div className={cn(
+        "w-full max-w-sm rounded-2xl border shadow-lg overflow-hidden",
+        cardBg
+      )}>
+
+        {/* Progress bar */}
+        <div className="h-0.5 bg-transparent">
+          <div
+            className="h-full bg-[#186244] transition-all duration-500"
+            style={{ width: { phone: "25%", otp: "60%", name: "85%", success: "100%" }[step] }}
+          />
+        </div>
+
+        <div className="px-7 py-8">
+
+          {/* ── Brand ─────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-2.5 mb-8">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base"
+              style={{ background: BRAND_GREEN }}
+            >
+              V
+            </div>
+            <div className="leading-none">
+              <p className="text-[10px] font-semibold text-[#186244] tracking-widest uppercase">CAFE</p>
+              <p className={cn("text-xs font-bold", textPrimary)}>VAJE</p>
+            </div>
+          </div>
+
+          {/* ── Heading ───────────────────────────────────────────────── */}
+          <div className="mb-7">
+            <h1 className={cn("text-xl font-black mb-1", textPrimary)}>
+              {stepMeta[step].title}
+            </h1>
+            <p className={cn("text-xs leading-relaxed", textMuted)}>
+              {stepMeta[step].sub}
+            </p>
+          </div>
+
+          {/* ── Error ─────────────────────────────────────────────────── */}
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+            <div className={cn(
+              "mb-5 text-xs px-3.5 py-2.5 rounded-xl border",
+              isDark ? "bg-red-950/40 border-red-900/40 text-red-400"
+                     : "bg-red-50 border-red-200 text-red-600"
+            )}>
               {error}
             </div>
           )}
 
+          {/* ── Phone step ────────────────────────────────────────────── */}
           {step === "phone" && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="phone">شماره موبایل</Label>
-                <div className="relative mt-1">
-                  <Phone className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={formatPhoneDisplay(phoneNumber)}
-                    onChange={e => {
-                      const normalized = normalizePhone(e.target.value);
-                      if (normalized.length <= 11) {
-                        setPhoneNumber(normalized);
-                      }
-                    }}
-                    placeholder="09123456789"
-                    className="pr-10"
-                    maxLength={13}
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleRequestOTP}
-                disabled={isLoading || normalizePhone(phoneNumber).length !== 11}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    در حال ارسال...
-                  </>
-                ) : (
-                  "ارسال کد ورود"
-                )}
-              </Button>
-            </div>
-          )}
-
-          {step === "otp" && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="otp">کد ورود</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  value={otp}
-                  onChange={e => {
-                    const value = e.target.value.replace(/\D/g, "");
-                    if (value.length <= 6) {
-                      setOtp(value);
-                    }
+                <label className={cn("block text-xs font-semibold mb-1.5", textMuted)}>
+                  شماره موبایل
+                </label>
+                <VajeInput
+                  id="phone"
+                  type="tel"
+                  value={formatPhoneDisplay(phoneNumber)}
+                  onChange={v => {
+                    const n = v.replace(/\D/g, "");
+                    if (n.length <= 11) setPhoneNumber(n);
                   }}
-                  placeholder="1234"
-                  className="text-center text-2xl tracking-widest"
-                  maxLength={6}
+                  placeholder="۰۹۱۲ ۳۴۵ ۶۷۸۹"
                   dir="ltr"
+                  icon={<Phone size={17} />}
+                  autoFocus
                 />
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  کد به شماره {formatPhoneDisplay(phoneNumber)} ارسال شد
-                </p>
-                <p className="text-xs text-blue-600 mt-1 text-center font-semibold bg-blue-50 p-2 rounded">
-                  💡 کد تست: <span className="font-mono font-bold">1234</span>
-                </p>
               </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setStep("phone");
-                    setOtp("");
-                    setError("");
-                  }}
-                  className="flex-1"
-                >
-                  <ArrowLeft className="ml-2 h-4 w-4" />
-                  تغییر شماره
-                </Button>
-                <Button
-                  onClick={handleVerifyOTP}
-                  disabled={isLoading || (otp.length !== 4 && otp.length !== 6)}
-                  className="flex-1"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      در حال بررسی...
-                    </>
-                  ) : (
-                    "تایید کد"
-                  )}
-                </Button>
-              </div>
-
-              {countdown > 0 ? (
-                <p className="text-xs text-center text-gray-500">
-                  ارسال مجدد کد پس از {toPersianDigits(countdown.toString())} ثانیه
-                </p>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={handleRequestOTP}
-                  disabled={isLoading}
-                  className="w-full text-sm"
-                >
-                  ارسال مجدد کد
-                </Button>
+              {submitBtn(
+                "ارسال کد تأیید",
+                handleRequestOTP,
+                normalizePhone(phoneNumber).length !== 11
               )}
             </div>
           )}
 
+          {/* ── OTP step ──────────────────────────────────────────────── */}
+          {step === "otp" && (
+            <div className="space-y-5">
+              <OtpBoxes value={otp} onChange={setOtp} />
+
+              <div className="text-center">
+                <p className={cn("text-xs", textMuted)}>
+                  کد به {formatPhoneDisplay(phoneNumber)} ارسال شد
+                </p>
+                <p className={cn(
+                  "text-xs mt-2 px-3 py-1.5 rounded-lg inline-block",
+                  isDark ? "bg-[#1f2520] text-[#8fa688]" : "bg-[#f0ece4] text-[#4b5563]"
+                )}>
+                  کد تست: <span className="font-mono font-bold">1234</span>
+                </p>
+              </div>
+
+              {submitBtn(
+                "تأیید کد",
+                handleVerifyOTP,
+                otp.replace(/\D/g, "").length < 4
+              )}
+
+              <div className="flex items-center justify-between text-xs">
+                <button
+                  onClick={() => { setStep("phone"); setOtp(""); setError(""); }}
+                  className={cn(
+                    "flex items-center gap-1 font-medium",
+                    textMuted, "hover:text-[#186244] transition-colors"
+                  )}
+                >
+                  <ArrowRight size={13} />
+                  تغییر شماره
+                </button>
+
+                {countdown > 0 ? (
+                  <span className={textMuted}>
+                    ارسال مجدد: {toPersianDigits(countdown.toString())}s
+                  </span>
+                ) : (
+                  <button
+                    onClick={handleRequestOTP}
+                    disabled={isLoading}
+                    className="font-medium text-[#186244] hover:underline"
+                  >
+                    ارسال مجدد کد
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Name step ─────────────────────────────────────────────── */}
           {step === "name" && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">نام و نام خانوادگی</Label>
-                <div className="relative mt-1">
-                  <User className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="نام خود را وارد کنید"
-                    className="pr-10"
-                  />
-                </div>
+                <label className={cn("block text-xs font-semibold mb-1.5", textMuted)}>
+                  نام و نام خانوادگی
+                </label>
+                <VajeInput
+                  id="name"
+                  value={name}
+                  onChange={setName}
+                  placeholder="نام خود را وارد کنید"
+                  icon={<User size={17} />}
+                  autoFocus
+                />
               </div>
-              <Button
-                onClick={handleSubmitName}
-                disabled={isLoading || !name.trim()}
-                className="w-full"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    در حال ثبت...
-                  </>
-                ) : (
-                  "ثبت و ادامه"
-                )}
-              </Button>
+              {submitBtn("ثبت و ادامه", handleSubmitName, !name.trim())}
             </div>
           )}
 
+          {/* ── Success step ──────────────────────────────────────────── */}
           {step === "success" && (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                <svg
-                  className="w-8 h-8 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <p className="text-lg font-semibold text-gray-900">ورود موفق!</p>
-              <p className="text-sm text-gray-500 mt-2">در حال انتقال به صفحه منو...</p>
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle2 size={52} className="text-[#186244]" strokeWidth={1.5} />
+              <p className={cn("text-base font-bold", textPrimary)}>ورود موفق!</p>
+              <p className={cn("text-xs", textMuted)}>در حال انتقال به صفحه منو…</p>
+              <Loader2 size={16} className="animate-spin text-[#186244] mt-1" />
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {/* ── Footer note ───────────────────────────────────────────── */}
+          {step !== "success" && (
+            <p className={cn("text-[10px] text-center mt-5", textMuted)}>
+              با ورود، قوانین و حریم خصوصی کافه واژه را می‌پذیرید
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
-

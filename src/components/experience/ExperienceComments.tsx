@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Star, Send, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Star, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCustomer } from "@/context/CustomerContext";
 
@@ -15,64 +10,61 @@ interface ExperienceCommentsProps {
   onCommentSubmitted?: () => void;
 }
 
-const ExperienceComments: React.FC<ExperienceCommentsProps> = ({ isDark = true, onCommentSubmitted }) => {
+const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
+  isDark = true,
+  onCommentSubmitted,
+}) => {
   const { customer, isAuthenticated } = useCustomer();
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
+  const [rating, setRating]           = useState(0);
+  const [hovered, setHovered]         = useState(0);
   const [commentText, setCommentText] = useState("");
-  const [customerName, setCustomerName] = useState(customer?.name || "");
+  const [customerName, setCustomerName]   = useState(customer?.name || "");
   const [customerPhone, setCustomerPhone] = useState(customer?.phoneNumber || "");
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting]   = useState(false);
+  const [success, setSuccess]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
+
+  const inputCls = cn(
+    "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition-all",
+    "focus:ring-2 focus:ring-[#186244]/30 focus:border-[#186244]",
+    isDark
+      ? "bg-[#1f2520] border-[#2c3329] text-[#edf2eb] placeholder:text-[#556b52]"
+      : "bg-[#f9f7f3] border-[#e5e0d8] text-[#111814] placeholder:text-[#9ca3af]"
+  );
+
+  const labelCls = cn(
+    "block text-xs font-semibold mb-1.5",
+    isDark ? "text-[#8fa688]" : "text-[#4b5563]"
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!rating || rating < 1 || rating > 5) {
-      setError("لطفاً امتیاز خود را انتخاب کنید");
-      return;
-    }
-
-    if (!commentText.trim()) {
-      setError("لطفاً نظر خود را بنویسید");
-      return;
-    }
+    if (rating < 1) { setError("لطفاً امتیاز خود را انتخاب کنید"); return; }
+    if (!commentText.trim()) { setError("لطفاً نظر خود را بنویسید"); return; }
 
     setSubmitting(true);
     setError(null);
-
     try {
-      const response = await fetch("/api/experience-comments", {
+      const res = await fetch("/api/experience-comments", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           comment_text: commentText,
           rating,
-          customer_name: customerName || null,
+          customer_name:  customerName  || null,
           customer_phone: customerPhone || null,
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "خطا در ثبت نظر");
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "خطا در ثبت نظر");
       }
-
       setSuccess(true);
       setCommentText("");
       setRating(0);
-      setTimeout(() => {
-        setSuccess(false);
-      }, 3000);
-      
-      // Notify parent component
-      if (onCommentSubmitted) {
-        onCommentSubmitted();
-      }
+      setTimeout(() => setSuccess(false), 4000);
+      onCommentSubmitted?.();
     } catch (err: any) {
       setError(err.message || "خطا در ثبت نظر");
     } finally {
@@ -80,144 +72,124 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({ isDark = true, 
     }
   };
 
+  if (success) {
+    return (
+      <div className="px-6 py-8 flex flex-col items-center gap-3 text-center">
+        <CheckCircle2 size={40} className="text-[#186244]" strokeWidth={1.5} />
+        <p className={cn("text-base font-bold", isDark ? "text-[#edf2eb]" : "text-[#111814]")}>
+          نظر شما ثبت شد
+        </p>
+        <p className={cn("text-sm", isDark ? "text-[#8fa688]" : "text-[#6b7280]")}>
+          پس از بررسی و تایید مدیر نمایش داده خواهد شد
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <Card className={cn(
-      isDark ? "bg-neutral-900/50 border-white/5" : "bg-white border-gray-200"
-    )}>
-      <CardContent className="p-6">
-        <h3 className={cn(
-          "text-xl font-bold mb-4",
-          isDark ? "text-white" : "text-gray-900"
+    <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+
+      {error && (
+        <div className={cn(
+          "text-sm px-3.5 py-2.5 rounded-xl border",
+          isDark
+            ? "bg-red-950/40 border-red-900/40 text-red-400"
+            : "bg-red-50 border-red-200 text-red-600"
         )}>
-          تجربه خود را با ما به اشتراک بگذارید
-        </h3>
+          {error}
+        </div>
+      )}
 
-        {success && (
-          <div className="mb-4 p-3 rounded-lg bg-green-900/30 border border-green-900/50 text-green-400 text-sm">
-            نظر شما با موفقیت ثبت شد و پس از تایید مدیر نمایش داده خواهد شد.
-          </div>
-        )}
+      {/* ── Rating ──────────────────────────────────────────────────── */}
+      <div>
+        <label className={labelCls}>
+          امتیاز شما <span className="text-red-500">*</span>
+        </label>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map(v => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setRating(v)}
+              onMouseEnter={() => setHovered(v)}
+              onMouseLeave={() => setHovered(0)}
+              className="focus:outline-none"
+            >
+              <Star
+                size={30}
+                className={cn(
+                  "transition-all hover:scale-110",
+                  v <= (hovered || rating)
+                    ? "text-amber-400 fill-amber-400"
+                    : isDark ? "text-[#2c3329] fill-[#2c3329]" : "text-[#e5e0d8] fill-[#e5e0d8]"
+                )}
+              />
+            </button>
+          ))}
+          {(hovered || rating) > 0 && (
+            <span className={cn("text-xs mr-2", isDark ? "text-[#8fa688]" : "text-[#6b7280]")}>
+              {["", "خیلی بد", "بد", "معمولی", "خوب", "عالی"][hovered || rating]}
+            </span>
+          )}
+        </div>
+      </div>
 
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400 text-sm">
-            {error}
-          </div>
-        )}
+      {/* ── Comment text ────────────────────────────────────────────── */}
+      <div>
+        <label className={labelCls}>
+          نظر شما <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          value={commentText}
+          onChange={e => setCommentText(e.target.value)}
+          rows={4}
+          placeholder="تجربه خود از کافه واژه را با ما به اشتراک بگذارید..."
+          className={cn(inputCls, "resize-none")}
+          required
+        />
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Rating Stars */}
+      {/* ── Optional identity fields ─────────────────────────────────── */}
+      {!isAuthenticated && (
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className={cn(isDark ? "text-gray-300" : "text-gray-700", "mb-2 block")}>
-              امتیاز شما <span className="text-red-500">*</span>
-            </Label>
-            <div className="flex items-center gap-1">
-              {[1, 2, 3, 4, 5].map((starValue) => (
-                <button
-                  key={starValue}
-                  type="button"
-                  onClick={() => setRating(starValue)}
-                  onMouseEnter={() => setHoveredRating(starValue)}
-                  onMouseLeave={() => setHoveredRating(0)}
-                  className="focus:outline-none"
-                >
-                  <Star
-                    size={32}
-                    className={cn(
-                      "transition-all",
-                      starValue <= (hoveredRating || rating)
-                        ? "text-yellow-400 fill-yellow-400"
-                        : "text-gray-400 fill-gray-400/20",
-                      "hover:scale-110 cursor-pointer"
-                    )}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Comment Text */}
-          <div>
-            <Label className={cn(isDark ? "text-gray-300" : "text-gray-700", "mb-2 block")}>
-              نظر شما <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              rows={4}
-              placeholder="تجربه خود از کافه واژه را با ما به اشتراک بگذارید..."
-              className={cn(
-                isDark
-                  ? "bg-neutral-800 border-neutral-700 text-white placeholder-gray-500"
-                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-              )}
-              required
+            <label className={labelCls}>نام (اختیاری)</label>
+            <input
+              value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className={inputCls}
+              placeholder="نام شما"
             />
           </div>
+          <div>
+            <label className={labelCls}>شماره تماس (اختیاری)</label>
+            <input
+              value={customerPhone}
+              onChange={e => setCustomerPhone(e.target.value)}
+              type="tel"
+              className={inputCls}
+              placeholder="۰۹۱۲…"
+            />
+          </div>
+        </div>
+      )}
 
-          {/* Customer Info (if not authenticated) */}
-          {!isAuthenticated && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700", "mb-2 block")}>
-                  نام (اختیاری)
-                </Label>
-                <Input
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className={cn(
-                    isDark
-                      ? "bg-neutral-800 border-neutral-700 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  )}
-                />
-              </div>
-              <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700", "mb-2 block")}>
-                  شماره تماس (اختیاری)
-                </Label>
-                <Input
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  type="tel"
-                  className={cn(
-                    isDark
-                      ? "bg-neutral-800 border-neutral-700 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  )}
-                />
-              </div>
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            disabled={submitting || !rating || !commentText.trim()}
-            className="w-full bg-coffee-600 hover:bg-coffee-500 text-white"
-          >
-            {submitting ? (
-              <>
-                <Loader2 size={18} className="mr-2 animate-spin" />
-                در حال ارسال...
-              </>
-            ) : (
-              <>
-                <Send size={18} className="mr-2" />
-                ارسال نظر
-              </>
-            )}
-          </Button>
-
-          <p className={cn(
-            "text-xs text-center",
-            isDark ? "text-gray-500" : "text-gray-400"
-          )}>
-            نظر شما پس از تایید مدیر نمایش داده خواهد شد
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+      {/* ── Submit ──────────────────────────────────────────────────── */}
+      <button
+        type="submit"
+        disabled={submitting || !rating || !commentText.trim()}
+        className={cn(
+          "w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition-all",
+          "bg-[#186244] hover:bg-[#1f7a56] active:scale-[0.98]",
+          "disabled:opacity-50 disabled:cursor-not-allowed"
+        )}
+      >
+        {submitting
+          ? <><Loader2 size={16} className="animate-spin" /> در حال ارسال...</>
+          : <><Send size={15} /> ارسال نظر</>}
+      </button>
+    </form>
   );
 };
 
 export default ExperienceComments;
-

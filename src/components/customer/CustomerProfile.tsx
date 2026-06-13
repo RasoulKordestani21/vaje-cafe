@@ -2,17 +2,19 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Edit, Save, X, Package, DollarSign, Calendar, Loader2, Camera, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Edit2, Save, X, Package, ShoppingBag, Calendar,
+  Loader2, Camera, Trash2, LogOut, User, Mail, Phone,
+  Star, MessageSquare,
+} from "lucide-react";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { timestampToJalaliString } from "@/utils/dateFormatter";
 import { useCustomer } from "@/context/CustomerContext";
+import { cn } from "@/lib/utils";
 import CustomerMessagesHistory from "./CustomerMessagesHistory";
 import CustomerLoyaltyView from "../loyalty/CustomerLoyaltyView";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface CustomerProfileData {
   id: string;
   name: string | null;
@@ -31,537 +33,482 @@ interface Order {
   tableNumber: string | null;
   customerNote: string | null;
   createdAt: number;
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
+  items: Array<{ name: string; quantity: number; price: number }>;
 }
 
 interface CustomerProfileProps {
   isDark?: boolean;
 }
 
+// ── Status helpers ─────────────────────────────────────────────────────────────
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending:    { label: "در انتظار",         color: "bg-amber-500/15 text-amber-600" },
+  preparing:  { label: "در حال آماده‌سازی", color: "bg-blue-500/15 text-blue-600" },
+  ready:      { label: "آماده تحویل",       color: "bg-[#186244]/15 text-[#186244]" },
+  completed:  { label: "تکمیل شده",         color: "bg-[#186244]/15 text-[#186244]" },
+  cancelled:  { label: "لغو شده",           color: "bg-red-500/15 text-red-600" },
+};
+
+// ── Tab type ───────────────────────────────────────────────────────────────────
+type Tab = "profile" | "orders" | "loyalty" | "messages";
+
+// ═════════════════════════════════════════════════════════════════════════════
 export default function CustomerProfile({ isDark = false }: CustomerProfileProps) {
-  const router = useRouter();
-  const customerContext = useCustomer();
-  const { isAuthenticated, authChecked, logout } = customerContext;
-  // TypeScript workaround: access updateCustomer directly from context
-  const updateCustomer = (customerContext as any).updateCustomer as (customer: { id: string; name: string | null; phoneNumber: string }) => void;
-  const [profile, setProfile] = useState<CustomerProfileData | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const router        = useRouter();
+  const ctx           = useCustomer();
+  const { isAuthenticated, authChecked, logout } = ctx;
+  const updateCustomer = (ctx as any).updateCustomer as (c: {
+    id: string; name: string | null; phoneNumber: string;
+  }) => void;
+
+  const [profile, setProfile]       = useState<CustomerProfileData | null>(null);
+  const [orders, setOrders]         = useState<Order[]>([]);
+  const [isLoading, setIsLoading]   = useState(true);
+  const [isEditing, setIsEditing]   = useState(false);
+  const [isSaving, setIsSaving]     = useState(false);
   const [editedName, setEditedName] = useState("");
   const [editedEmail, setEditedEmail] = useState("");
-  const [error, setError] = useState("");
-  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [error, setError]           = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab]   = useState<Tab>("profile");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!authChecked) return;
-
-    if (!isAuthenticated) {
-      router.push("/customer/login");
-      return;
-    }
-
+    if (!isAuthenticated) { router.push("/customer/login"); return; }
     fetchProfile();
     fetchOrders();
   }, [authChecked, isAuthenticated, router]);
 
   const fetchProfile = async () => {
     try {
-      const response = await fetch("/api/customer/profile", {
-        credentials: "include"
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data.customer);
-        setEditedName(data.customer.name || "");
-        setEditedEmail(data.customer.email || "");
-        setPreviewImage(data.customer.profilePicture || null);
-      } else if (response.status === 401) {
-        // Session expired, logout and redirect to login
-        logout();
-        router.push("/customer/login");
-        return;
+      const res = await fetch("/api/customer/profile", { credentials: "include" });
+      if (res.ok) {
+        const d = await res.json();
+        setProfile(d.customer);
+        setEditedName(d.customer.name || "");
+        setEditedEmail(d.customer.email || "");
+        setPreviewImage(d.customer.profilePicture || null);
+      } else if (res.status === 401) {
+        logout(); router.push("/customer/login");
       } else {
         setError("خطا در دریافت اطلاعات پروفایل");
       }
-    } catch (error) {
-      console.error("Error fetching profile:", error);
-      setError("خطا در ارتباط با سرور");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { setError("خطا در ارتباط با سرور"); }
+    finally  { setIsLoading(false); }
   };
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch("/api/customer/orders", {
-        credentials: "include"
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-      } else if (response.status === 401) {
-        // Session expired, logout and redirect to login
-        logout();
-        router.push("/customer/login");
-      }
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-    }
+      const res = await fetch("/api/customer/orders", { credentials: "include" });
+      if (res.ok) { const d = await res.json(); setOrders(d.orders || []); }
+      else if (res.status === 401) { logout(); router.push("/customer/login"); }
+    } catch {}
   };
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setError("");
-
+    setIsSaving(true); setError("");
     try {
-      const response = await fetch("/api/customer/profile", {
+      const res = await fetch("/api/customer/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          name: editedName.trim() || null,
-          email: editedEmail.trim() || null
-        })
+        body: JSON.stringify({ name: editedName.trim() || null, email: editedEmail.trim() || null }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data.customer);
+      if (res.ok) {
+        const d = await res.json();
+        setProfile(d.customer);
         setIsEditing(false);
-        // Update customer context
-        updateCustomer({
-          id: data.customer.id,
-          name: data.customer.name,
-          phoneNumber: data.customer.phoneNumber
-        });
-      } else if (response.status === 401) {
-        // Session expired, logout and redirect to login
-        logout();
-        router.push("/customer/login");
-        return;
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "خطا در به‌روزرسانی پروفایل");
-      }
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setError("خطا در ارتباط با سرور");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleCancel = () => {
-    if (profile) {
-      setEditedName(profile.name || "");
-      setEditedEmail(profile.email || "");
-    }
-    setIsEditing(false);
-    setError("");
+        updateCustomer({ id: d.customer.id, name: d.customer.name, phoneNumber: d.customer.phoneNumber });
+      } else if (res.status === 401) { logout(); router.push("/customer/login"); }
+      else { const d = await res.json(); setError(d.error || "خطا"); }
+    } catch { setError("خطا در ارتباط با سرور"); }
+    finally  { setIsSaving(false); }
   };
 
   const handlePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("فایل تصویری انتخاب کنید"); return; }
+    if (file.size > 5 * 1024 * 1024)    { setError("حجم فایل نباید بیشتر از ۵ مگابایت باشد"); return; }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      setError("لطفا یک فایل تصویری انتخاب کنید");
-      return;
-    }
-
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      setError("حجم فایل نباید بیشتر از 5 مگابایت باشد");
-      return;
-    }
-
-    // Show preview
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewImage(reader.result as string);
-    };
+    reader.onloadend = () => setPreviewImage(reader.result as string);
     reader.readAsDataURL(file);
 
-    // Upload image
-    setIsUploadingPicture(true);
-    setError("");
-
+    setIsUploading(true); setError("");
     try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const response = await fetch("/api/customer/profile/picture", {
-        method: "POST",
-        credentials: "include",
-        body: formData
+      const fd = new FormData(); fd.append("image", file);
+      const res = await fetch("/api/customer/profile/picture", {
+        method: "POST", credentials: "include", body: fd,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(prev => prev ? { ...prev, profilePicture: data.profilePicture } : null);
-        // Refresh profile to get updated data
-        await fetchProfile();
-      } else if (response.status === 401) {
-        // Session expired, logout and redirect to login
-        logout();
-        router.push("/customer/login");
-        return;
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "خطا در آپلود تصویر");
-        setPreviewImage(profile?.profilePicture || null);
-      }
-    } catch (error) {
-      console.error("Error uploading picture:", error);
-      setError("خطا در ارتباط با سرور");
-      setPreviewImage(profile?.profilePicture || null);
-    } finally {
-      setIsUploadingPicture(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (res.ok) { await fetchProfile(); }
+      else if (res.status === 401) { logout(); router.push("/customer/login"); }
+      else { const d = await res.json(); setError(d.error || "خطا در آپلود"); setPreviewImage(profile?.profilePicture || null); }
+    } catch { setError("خطا در ارتباط با سرور"); setPreviewImage(profile?.profilePicture || null); }
+    finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleDeletePicture = async () => {
-    if (!confirm("آیا مطمئن هستید که می‌خواهید تصویر پروفایل را حذف کنید؟")) {
-      return;
-    }
-
-    setIsUploadingPicture(true);
-    setError("");
-
+    setIsUploading(true); setError("");
     try {
-      const response = await fetch("/api/customer/profile/picture", {
-        method: "DELETE",
-        credentials: "include"
-      });
-
-      if (response.ok) {
-        setProfile(prev => prev ? { ...prev, profilePicture: null } : null);
-        setPreviewImage(null);
-        await fetchProfile();
-      } else if (response.status === 401) {
-        // Session expired, logout and redirect to login
-        logout();
-        router.push("/customer/login");
-        return;
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "خطا در حذف تصویر");
-      }
-    } catch (error) {
-      console.error("Error deleting picture:", error);
-      setError("خطا در ارتباط با سرور");
-    } finally {
-      setIsUploadingPicture(false);
-    }
+      const res = await fetch("/api/customer/profile/picture", { method: "DELETE", credentials: "include" });
+      if (res.ok) { setPreviewImage(null); await fetchProfile(); }
+      else if (res.status === 401) { logout(); router.push("/customer/login"); }
+      else { const d = await res.json(); setError(d.error || "خطا در حذف"); }
+    } catch { setError("خطا در ارتباط با سرور"); }
+    finally  { setIsUploading(false); }
   };
 
+  // ── Surfaces ────────────────────────────────────────────────────────────────
+  const bg      = isDark ? "bg-[#0f120e]"     : "bg-[#faf8f4]";
+  const surface = isDark ? "bg-[#141a12]"     : "bg-white";
+  const border  = isDark ? "border-[#2c3329]" : "border-[#e5e0d8]";
+  const text    = isDark ? "text-[#edf2eb]"   : "text-[#111814]";
+  const muted   = isDark ? "text-[#8fa688]"   : "text-[#6b7280]";
+  const mutedbg = isDark ? "bg-[#1f2520]"     : "bg-[#f0ece4]";
+
+  const inputCls = cn(
+    "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition-all",
+    "focus:ring-2 focus:ring-[#186244]/30 focus:border-[#186244]",
+    isDark
+      ? "bg-[#1f2520] border-[#2c3329] text-[#edf2eb] placeholder:text-[#556b52]"
+      : "bg-[#f9f7f3] border-[#e5e0d8] text-[#111814] placeholder:text-[#9ca3af]"
+  );
+
+  const readonlyCls = cn(
+    "w-full rounded-xl border px-3.5 py-2.5 text-sm",
+    isDark ? "bg-[#181c17] border-[#2c3329] text-[#8fa688]"
+           : "bg-[#f4f2ee] border-[#e5e0d8] text-[#6b7280]"
+  );
+
+  // ── Loading ─────────────────────────────────────────────────────────────────
   if (!authChecked || isLoading) {
     return (
-      <div className="flex justify-center items-center py-20">
-        <Loader2 className="animate-spin text-coffee-500 w-10 h-10" />
+      <div className={cn("min-h-screen flex items-center justify-center", bg)}>
+        <Loader2 className="animate-spin text-[#186244] w-8 h-8" />
       </div>
     );
   }
-
   if (!profile) {
     return (
-      <div className="text-center py-20">
-        <p className="text-red-500">{error || "خطا در دریافت اطلاعات"}</p>
+      <div className={cn("min-h-screen flex items-center justify-center", bg)}>
+        <p className="text-red-500 text-sm">{error || "خطا در دریافت اطلاعات"}</p>
       </div>
     );
   }
 
+  const avatarLetter = profile.name?.charAt(0) || profile.phoneNumber.slice(-1);
+  const hasAvatar = !!(previewImage || profile.profilePicture);
+
+  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "profile",  label: "پروفایل",   icon: <User size={15} /> },
+    { id: "orders",   label: "سفارشات",   icon: <ShoppingBag size={15} /> },
+    { id: "loyalty",  label: "امتیازها",  icon: <Star size={15} /> },
+    { id: "messages", label: "پیام‌ها",   icon: <MessageSquare size={15} /> },
+  ];
+
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6" dir="rtl">
-      {/* Profile Card */}
-      <Card className={isDark ? "bg-neutral-900 border-neutral-800" : "bg-white"}>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>پروفایل من</CardTitle>
-              <CardDescription>اطلاعات شخصی و آمار سفارشات</CardDescription>
-            </div>
-            {!isEditing && (
-              <Button
-                variant="outline"
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-2"
-              >
-                <Edit className="h-4 w-4" />
-                <span>ویرایش</span>
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
+    <div className={cn("min-h-screen", bg)} dir="rtl">
 
-          {/* Profile Picture */}
-          <div className="flex items-center gap-6 pb-6 border-b">
-            <div className="relative">
-              {previewImage || profile.profilePicture ? (
-                <div className="relative">
-                  <img
-                    src={previewImage || profile.profilePicture || ""}
-                    alt="Profile"
-                    className="w-24 h-24 rounded-full object-cover border-2 border-coffee-600"
-                  />
-                  {isUploadingPicture && (
-                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-                      <Loader2 className="animate-spin text-white w-6 h-6" />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="w-24 h-24 rounded-full bg-coffee-600 flex items-center justify-center text-white text-2xl font-bold border-2 border-coffee-700">
-                  {profile.name ? profile.name.charAt(0).toUpperCase() : profile.phoneNumber.slice(-1)}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePictureChange}
-                className="hidden"
-                id="profile-picture-input"
-                disabled={isUploadingPicture}
-              />
-              <label
-                htmlFor="profile-picture-input"
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${
-                  isUploadingPicture
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "bg-coffee-600 text-white hover:bg-coffee-500"
-                }`}
-              >
-                <Camera className="h-4 w-4" />
-                <span>{isUploadingPicture ? "در حال آپلود..." : "تغییر تصویر"}</span>
-              </label>
-              {(previewImage || profile.profilePicture) && (
-                <button
-                  onClick={handleDeletePicture}
-                  disabled={isUploadingPicture}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>حذف تصویر</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Profile Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label>نام</Label>
-              {isEditing ? (
-                <Input
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  placeholder="نام خود را وارد کنید"
-                  className="mt-1"
+      {/* ── Header banner ───────────────────────────────────────────────── */}
+      <div className={cn("border-b", border, isDark ? "bg-[#141a12]" : "bg-white")}>
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              {hasAvatar ? (
+                <img
+                  src={previewImage || profile.profilePicture || ""}
+                  alt="پروفایل"
+                  className="w-16 h-16 rounded-2xl object-cover border-2 border-[#186244]"
                 />
               ) : (
-                <div className="mt-1 px-3 py-2 rounded-md border bg-gray-50 dark:bg-neutral-800">
-                  {profile.name || "بدون نام"}
+                <div className={cn(
+                  "w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black",
+                  "bg-[#186244] text-white"
+                )}>
+                  {avatarLetter}
+                </div>
+              )}
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/50 rounded-2xl flex items-center justify-center">
+                  <Loader2 className="animate-spin text-white w-5 h-5" />
                 </div>
               )}
             </div>
 
-            <div>
-              <Label>شماره تلفن</Label>
-              <div className="mt-1 px-3 py-2 rounded-md border bg-gray-50 dark:bg-neutral-800">
+            {/* Name + phone */}
+            <div className="flex-1 min-w-0">
+              <p className={cn("text-lg font-black truncate", text)}>
+                {profile.name || "بدون نام"}
+              </p>
+              <p className={cn("text-sm font-mono mt-0.5", muted)} dir="ltr">
                 {profile.phoneNumber}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">شماره تلفن قابل تغییر نیست</p>
+              </p>
             </div>
 
-            <div>
-              <Label>ایمیل</Label>
-              {isEditing ? (
-                <Input
-                  type="email"
-                  value={editedEmail}
-                  onChange={(e) => setEditedEmail(e.target.value)}
-                  placeholder="ایمیل خود را وارد کنید (اختیاری)"
-                  className="mt-1"
-                />
+            {/* Logout */}
+            <button
+              onClick={() => { logout(); router.push("/"); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all",
+                border, muted, "hover:text-red-500 hover:border-red-300"
+              )}
+            >
+              <LogOut size={13} />
+              خروج
+            </button>
+          </div>
+
+          {/* Stat chips */}
+          <div className="grid grid-cols-3 gap-2 mt-5">
+            {[
+              { icon: <Package size={14}/>,  label: "سفارش",   value: toPersianDigits(profile.totalOrders.toString()) },
+              { icon: <ShoppingBag size={14}/>, label: "خرید", value: formatToman(profile.totalSpent) },
+              { icon: <Calendar size={14}/>, label: "آخرین",   value: profile.lastOrderDate ? timestampToJalaliString(profile.lastOrderDate) : "—" },
+            ].map((s, i) => (
+              <div key={i} className={cn(
+                "flex flex-col items-center gap-1 rounded-xl p-3 border text-center", mutedbg, border
+              )}>
+                <span className="text-[#186244]">{s.icon}</span>
+                <span className={cn("text-base font-black leading-none", text)}>{s.value}</span>
+                <span className={cn("text-[10px]", muted)}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Tab bar ─────────────────────────────────────────────────── */}
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="flex gap-0.5 overflow-x-auto scrollbar-hide">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-all",
+                  activeTab === t.id
+                    ? "border-[#186244] text-[#186244]"
+                    : cn("border-transparent", muted, "hover:text-[#186244]")
+                )}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tab content ─────────────────────────────────────────────────── */}
+      <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+
+        {error && (
+          <div className={cn(
+            "text-xs px-4 py-3 rounded-xl border",
+            isDark ? "bg-red-950/40 border-red-900/40 text-red-400" : "bg-red-50 border-red-200 text-red-600"
+          )}>
+            {error}
+          </div>
+        )}
+
+        {/* ── PROFILE TAB ───────────────────────────────────────────────── */}
+        {activeTab === "profile" && (
+          <div className={cn("rounded-2xl border overflow-hidden", border, surface)}>
+            {/* header row */}
+            <div className={cn("flex items-center justify-between px-5 py-4 border-b", border)}>
+              <p className={cn("text-sm font-bold", text)}>اطلاعات شخصی</p>
+              {!isEditing ? (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all",
+                    border, muted, "hover:text-[#186244] hover:border-[#186244]"
+                  )}
+                >
+                  <Edit2 size={12} />
+                  ویرایش
+                </button>
               ) : (
-                <div className="mt-1 px-3 py-2 rounded-md border bg-gray-50 dark:bg-neutral-800">
-                  {profile.email || "ثبت نشده"}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setIsEditing(false); setError(""); setEditedName(profile.name || ""); setEditedEmail(profile.email || ""); }}
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all", border, muted)}
+                    disabled={isSaving}
+                  >
+                    <X size={12} /> انصراف
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#186244] text-white disabled:opacity-50"
+                  >
+                    {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                    ذخیره
+                  </button>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-coffee-50 dark:bg-coffee-900/20">
-              <Package className="h-8 w-8 text-coffee-600" />
+            {/* fields */}
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Name */}
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">تعداد سفارشات</div>
-                <div className="text-2xl font-bold text-coffee-900 dark:text-coffee-100">
-                  {toPersianDigits(profile.totalOrders.toString())}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
-              <DollarSign className="h-8 w-8 text-green-600" />
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">مجموع خرید</div>
-                <div className="text-2xl font-bold text-green-900 dark:text-green-100">
-                  {formatToman(profile.totalSpent)}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-              <Calendar className="h-8 w-8 text-blue-600" />
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">آخرین سفارش</div>
-                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                  {profile.lastOrderDate
-                    ? timestampToJalaliString(profile.lastOrderDate)
-                    : "سفارشی ثبت نشده"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Edit Actions */}
-          {isEditing && (
-            <div className="flex gap-2 justify-end pt-4 border-t">
-              <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
-                <X className="ml-2 h-4 w-4" />
-                انصراف
-              </Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    در حال ذخیره...
-                  </>
+                <label className={cn("flex items-center gap-1 text-xs font-semibold mb-1.5", muted)}>
+                  <User size={12}/> نام
+                </label>
+                {isEditing ? (
+                  <input
+                    value={editedName}
+                    onChange={e => setEditedName(e.target.value)}
+                    placeholder="نام خود را وارد کنید"
+                    className={inputCls}
+                  />
                 ) : (
-                  <>
-                    <Save className="ml-2 h-4 w-4" />
-                    ذخیره تغییرات
-                  </>
+                  <div className={readonlyCls}>{profile.name || "—"}</div>
                 )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </div>
 
-      {/* Order History */}
-      <Card className={isDark ? "bg-neutral-900 border-neutral-800" : "bg-white"}>
-        <CardHeader>
-          <CardTitle>تاریخچه سفارشات</CardTitle>
-          <CardDescription>سفارشات قبلی شما</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {orders.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Package className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>هنوز سفارشی ثبت نکرده‌اید</p>
+              {/* Phone (readonly) */}
+              <div>
+                <label className={cn("flex items-center gap-1 text-xs font-semibold mb-1.5", muted)}>
+                  <Phone size={12}/> شماره موبایل
+                </label>
+                <div className={cn(readonlyCls, "font-mono")} dir="ltr">{profile.phoneNumber}</div>
+                <p className={cn("text-[10px] mt-1", muted)}>شماره موبایل قابل تغییر نیست</p>
+              </div>
+
+              {/* Email */}
+              <div className="sm:col-span-2">
+                <label className={cn("flex items-center gap-1 text-xs font-semibold mb-1.5", muted)}>
+                  <Mail size={12}/> ایمیل (اختیاری)
+                </label>
+                {isEditing ? (
+                  <input
+                    type="email"
+                    value={editedEmail}
+                    onChange={e => setEditedEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    dir="ltr"
+                    className={inputCls}
+                  />
+                ) : (
+                  <div className={readonlyCls} dir="ltr">{profile.email || "—"}</div>
+                )}
+              </div>
+            </div>
+
+            {/* Profile picture section */}
+            <div className={cn("px-5 pb-5 pt-3 border-t", border)}>
+              <p className={cn("text-xs font-semibold mb-3", muted)}>تصویر پروفایل</p>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePictureChange}
+                  className="hidden"
+                  id="profile-picture-input"
+                  disabled={isUploading}
+                />
+                <label
+                  htmlFor="profile-picture-input"
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-all",
+                    "bg-[#186244] text-white hover:bg-[#1f7a56]",
+                    isUploading && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <Camera size={13} />
+                  {isUploading ? "در حال آپلود..." : "تغییر تصویر"}
+                </label>
+                {hasAvatar && (
+                  <button
+                    onClick={handleDeletePicture}
+                    disabled={isUploading}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all",
+                      border, "text-red-500 hover:bg-red-500/10",
+                      isUploading && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Trash2 size={13} />
+                    حذف تصویر
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ORDERS TAB ────────────────────────────────────────────────── */}
+        {activeTab === "orders" && (
+          orders.length === 0 ? (
+            <div className={cn("flex flex-col items-center justify-center py-20 rounded-2xl", mutedbg)}>
+              <Package size={40} className={cn("mb-4", muted)} strokeWidth={1.5} />
+              <p className={cn("text-sm font-medium", muted)}>هنوز سفارشی ثبت نکرده‌اید</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {orders.map((order) => (
-                <div
-                  key={order.id}
-                  className="border rounded-lg p-4 space-y-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-semibold text-lg">
-                        سفارش #{order.id.slice(0, 8)}
+            <div className="space-y-3">
+              {orders.map(order => {
+                const st = STATUS_MAP[order.status] ?? { label: order.status, color: "bg-gray-100 text-gray-600" };
+                return (
+                  <div key={order.id} className={cn("rounded-2xl border overflow-hidden", border, surface)}>
+                    {/* order header */}
+                    <div className={cn("flex items-center justify-between px-4 py-3 border-b", border)}>
+                      <div>
+                        <p className={cn("text-sm font-bold", text)}>
+                          سفارش #{order.id.slice(0, 8)}
+                        </p>
+                        <p className={cn("text-xs mt-0.5", muted)}>
+                          {timestampToJalaliString(order.createdAt)}
+                          {order.tableNumber && ` · میز ${order.tableNumber}`}
+                        </p>
                       </div>
-                      <div className="text-sm text-gray-500 mt-1">
-                        {timestampToJalaliString(order.createdAt)}
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <div className="font-bold text-lg text-coffee-600">
-                        {formatToman(order.total)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        وضعیت: {order.status === "pending" ? "در انتظار" : 
-                                order.status === "preparing" ? "در حال آماده‌سازی" :
-                                order.status === "ready" ? "آماده" :
-                                order.status === "completed" ? "تکمیل شده" :
-                                order.status === "cancelled" ? "لغو شده" : order.status}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={cn("text-xs font-bold", text)}>{formatToman(order.total)}</span>
+                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", st.color)}>
+                          {st.label}
+                        </span>
                       </div>
                     </div>
-                  </div>
 
-                  {order.tableNumber && (
-                    <div className="text-sm text-gray-600">
-                      میز: {order.tableNumber}
-                    </div>
-                  )}
-
-                  {order.customerNote && (
-                    <div className="text-sm text-gray-600 italic">
-                      یادداشت: {order.customerNote}
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t">
-                    <div className="text-sm font-medium mb-2">آیتم‌ها:</div>
-                    <ul className="space-y-1">
-                      {order.items.map((item, idx) => (
-                        <li key={idx} className="text-sm text-gray-600 flex justify-between">
-                          <span>
-                            {item.name} × {toPersianDigits(item.quantity.toString())}
-                          </span>
+                    {/* items */}
+                    <div className="px-4 py-3 space-y-1">
+                      {order.items.map((item, i) => (
+                        <div key={i} className={cn("flex justify-between text-xs", muted)}>
+                          <span>{item.name} × {toPersianDigits(item.quantity.toString())}</span>
                           <span>{formatToman(item.price * item.quantity)}</span>
-                        </li>
+                        </div>
                       ))}
-                    </ul>
+                      {order.customerNote && (
+                        <p className={cn("text-xs italic mt-2 pt-2 border-t", border, muted)}>
+                          یادداشت: {order.customerNote}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          )
+        )}
 
-      {/* Loyalty Program Card */}
-      <CustomerLoyaltyView isDark={isDark} />
+        {/* ── LOYALTY TAB ───────────────────────────────────────────────── */}
+        {activeTab === "loyalty" && (
+          <CustomerLoyaltyView isDark={isDark} />
+        )}
 
-      {/* Messages History Card */}
-      <Card className={isDark ? "bg-neutral-900 border-neutral-800" : "bg-white"}>
-        <CardHeader>
-          <CardTitle>پیام‌های من</CardTitle>
-          <CardDescription>تاریخچه پیام‌ها و پاسخ‌های مدیر</CardDescription>
-        </CardHeader>
-        <CardContent>
+        {/* ── MESSAGES TAB ──────────────────────────────────────────────── */}
+        {activeTab === "messages" && (
           <CustomerMessagesHistory isDark={isDark} />
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }
-

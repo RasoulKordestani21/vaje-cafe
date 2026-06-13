@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Instagram, MapPin, Clock } from "lucide-react";
-import { QRCodeCanvas } from "qrcode.react";
-import { useMenu } from "@/context/MenuContext";
+import React, { useEffect, useState, useContext } from "react";
+import Link from "next/link";
+import { Instagram, MapPin, Clock, Coffee } from "lucide-react";
 import { LOGO_URL } from "@/constants";
+import { ThemeContext } from "@/app/providers";
+import { cn } from "@/lib/utils";
 
 interface FooterSettings {
   footer_description?: string;
   footer_social_instagram?: string;
   footer_address?: string;
-  qr_code_url?: string;
   logo_url?: string;
   site_name?: string;
 }
@@ -22,166 +22,173 @@ interface WorkingHour {
   is_closed: number;
 }
 
+const NAV_LINKS = [
+  { href: "/",          label: "خانه" },
+  { href: "/menu",      label: "منو" },
+  { href: "/gallery",   label: "گالری" },
+  { href: "/experience",label: "نظرات" },
+];
+
 const Footer: React.FC = () => {
-  const { qrCodeUrl } = useMenu();
-  const [settings, setSettings] = useState<FooterSettings>({});
-  const [logoUrl, setLogoUrl] = useState(LOGO_URL);
+  const { isDark }  = useContext(ThemeContext);
+  const [settings, setSettings]         = useState<FooterSettings>({});
+  const [logoUrl, setLogoUrl]           = useState(LOGO_URL);
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings/public").then(res => res.json()),
-      fetch("/api/working-hours").then(res => {
-        if (!res.ok) {
-          console.warn("Failed to fetch working hours:", res.status);
-          return { workingHours: [] };
-        }
-        return res.json();
-      })
+      fetch("/api/settings/public").then(r => r.json()),
+      fetch("/api/working-hours").then(r => r.ok ? r.json() : { workingHours: [] }),
     ])
-      .then(([settingsData, hoursData]) => {
-        if (settingsData.settings) {
-          setSettings(settingsData.settings);
-          if (settingsData.settings.logo_url) {
-            setLogoUrl(settingsData.settings.logo_url);
-          }
+      .then(([sData, hData]) => {
+        if (sData.settings) {
+          setSettings(sData.settings);
+          if (sData.settings.logo_url) setLogoUrl(sData.settings.logo_url);
         }
-        if (hoursData && hoursData.workingHours && Array.isArray(hoursData.workingHours)) {
-          setWorkingHours(hoursData.workingHours);
-        } else {
-          console.warn("No working hours data received:", hoursData);
-        }
+        if (Array.isArray(hData?.workingHours)) setWorkingHours(hData.workingHours);
       })
-      .catch(err => {
-        console.error("Failed to fetch footer data:", err);
-        // Set empty array on error so default text shows
-        setWorkingHours([]);
-      });
+      .catch(() => {});
   }, []);
 
-  const siteName = settings.site_name || "کافه واژه";
-  const description = settings.footer_description || "خلق لحظاتی از شفافیت و ارتباط با هنر قهوه تخصصی. تجربه‌ای متفاوت از عطر و طعم در فضایی آرام.";
-  const instagram = settings.footer_social_instagram || "@vaje.cafe";
-  const address = settings.footer_address || "اسدآباد - خیابان صاحب‌زمان شرقی- دور میدان نون و قلم\nکافه واژه";
-  const qrUrl = settings.qr_code_url || qrCodeUrl;
+  const siteName    = settings.site_name              || "کافه واژه";
+  const description = settings.footer_description     || "خلق لحظاتی از شفافیت و ارتباط با هنر قهوه تخصصی. تجربه‌ای متفاوت از عطر و طعم در فضایی آرام.";
+  const instagram   = settings.footer_social_instagram || "@vaje.cafe";
+  const address     = settings.footer_address          || "اسدآباد – خیابان صاحب‌زمان شرقی – دور میدان نون و قلم";
 
-  // Get working hours display text
-  const getWorkingHoursText = () => {
-    console.log(workingHours);
-    if (workingHours.length === 0) {
-      return "همه روزه: ۷:۰۰ صبح تا ۱۱:۰۰ شب";
-    }
+  const hoursText = (() => {
+    const open = workingHours.filter(h => h.is_closed === 0);
+    if (open.length === 0) return "همه روزه: ۷:۰۰ تا ۲۳:۰۰";
+    const first = open[0];
+    const same  = open.every(h => h.open_time === first.open_time && h.close_time === first.close_time);
+    if (same) return `همه روزه: ${first.open_time} تا ${first.close_time}`;
+    const opens  = open.map(h => h.open_time).sort();
+    const closes = open.map(h => h.close_time).sort();
+    return `${opens[0]} تا ${closes[closes.length - 1]}`;
+  })();
 
-    // Check if all days have the same hours
-    const openDays = workingHours.filter(h => h.is_closed === 0);
-    if (openDays.length === 0) {
-      return "در حال حاضر تعطیل";
-    }
-
-    const firstOpenDay = openDays[0];
-    const allSameHours = openDays.every(
-      h => h.open_time === firstOpenDay.open_time && h.close_time === firstOpenDay.close_time
-    );
-
-    if (allSameHours && openDays.length === 7) {
-      // All days same hours
-      return `همه روزه: ${firstOpenDay.open_time} تا ${firstOpenDay.close_time}`;
-    } else if (allSameHours) {
-      // Some days same hours
-      return `همه روزه: ${firstOpenDay.open_time} تا ${firstOpenDay.close_time}`;
-    } else {
-      // Different hours for different days - show range
-      const allOpenTimes = openDays.map(h => h.open_time).sort();
-      const allCloseTimes = openDays.map(h => h.close_time).sort();
-      const earliestOpen = allOpenTimes[0];
-      const latestClose = allCloseTimes[allCloseTimes.length - 1];
-      return `${earliestOpen} تا ${latestClose}`;
-    }
-  };
+  // ── Surfaces ───────────────────────────────────────────────────────────────
+  const footerBg  = isDark ? "bg-[#0d1009]"      : "bg-[#f0ece4]";
+  const borderCol = isDark ? "border-[#1f2520]"   : "border-[#ddd8cf]";
+  const textMain  = isDark ? "text-[#edf2eb]"     : "text-[#111814]";
+  const textMuted = isDark ? "text-[#6b7c67]"     : "text-[#6b7280]";
+  const textLink  = isDark
+    ? "text-[#8fa688] hover:text-[#4ade80] transition-colors"
+    : "text-[#4b5563] hover:text-[#186244] transition-colors";
 
   return (
-    <footer className="dark:bg-neutral-900 bg-primary-800 dark:border-white/5 border-transparent pt-12 pb-8 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 text-right">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <img
-                src={logoUrl}
-                alt="Vaje Cafe Logo"
-                className="w-14 h-14 rounded-full border border-coffee-500/30 object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = LOGO_URL;
-                }}
-              />
-              <h3 className="font-serif text-2xl text-coffee-100 font-bold">
-                {siteName}
-              </h3>
+    <footer className="mt-8 px-3 pb-4 sm:px-5" dir="rtl">
+      <div className={cn(
+        "max-w-6xl mx-auto rounded-2xl overflow-hidden border",
+        footerBg, borderCol
+      )}>
+
+        {/* ── Main content ────────────────────────────────────────────── */}
+        <div className="px-6 py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+
+          {/* Brand column */}
+          <div className="sm:col-span-2 lg:col-span-1 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0"
+                style={{ background: "#186244" }}
+              >
+                V
+              </div>
+              <div className="leading-none">
+                <p className="text-[10px] font-semibold text-[#186244] tracking-widest uppercase">CAFE</p>
+                <p className={cn("text-sm font-black", textMain)}>VAJE</p>
+              </div>
             </div>
-            <p className="text-sm dark:text-gray-400 text-gray-700 leading-8 whitespace-pre-line">
+            <p className={cn("text-xs leading-6 line-clamp-4", textMuted)}>
               {description}
             </p>
+            {/* Instagram */}
+            <a
+              href={`https://www.instagram.com/${instagram.replace("@", "")}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("inline-flex items-center gap-2 text-xs font-medium", textLink)}
+            >
+              <Instagram size={14} className="shrink-0" />
+              <span dir="ltr">{instagram}</span>
+            </a>
           </div>
 
-          <div className="space-y-4">
-            <h3 className="font-serif text-xl text-coffee-100 font-bold">
+          {/* Quick links */}
+          <div className="space-y-3">
+            <h4 className={cn("text-xs font-bold uppercase tracking-widest", textMuted)}>
+              صفحات
+            </h4>
+            <ul className="space-y-2">
+              {NAV_LINKS.map(l => (
+                <li key={l.href}>
+                  <Link href={l.href} className={cn("text-sm", textLink)}>
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Location & hours */}
+          <div className="space-y-3">
+            <h4 className={cn("text-xs font-bold uppercase tracking-widest", textMuted)}>
               دسترسی
-            </h3>
-            <ul className="space-y-3 text-sm dark:text-gray-400 text-gray-700">
-              <li className="flex items-start gap-3">
-                <MapPin
-                  size={18}
-                  className="mt-1 text-coffee-500 flex-shrink-0"
-                />
-                <span className="whitespace-pre-line">
+            </h4>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-2.5">
+                <MapPin size={13} className="mt-0.5 text-[#186244] shrink-0" />
+                <span className={cn("text-xs leading-5 whitespace-pre-line", textMuted)}>
                   {address}
                 </span>
               </li>
-              <li className="flex items-center gap-3">
-                <Clock size={18} className="text-coffee-500 flex-shrink-0" />
-                <span>{getWorkingHoursText()}</span>
+              <li className="flex items-center gap-2.5">
+                <Clock size={13} className="text-[#186244] shrink-0" />
+                <span className={cn("text-xs", textMuted)}>{hoursText}</span>
               </li>
             </ul>
           </div>
 
-          <div className="space-y-4">
-            <h3 className="font-serif text-xl text-coffee-100 font-bold">
-              شبکه‌های اجتماعی
-            </h3>
-            <a
-              href={`https://www.instagram.com/${instagram.replace('@', '')}/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 dark:text-gray-400 text-gray-700 dark:hover:text-coffee-400 hover:text-coffee-600 transition-colors"
-            >
-              <Instagram size={20} />
-              <span dir="ltr">{instagram}</span>
-            </a>
-
-            {qrUrl && (
-              <div className="flex flex-col items-start gap-3 mt-4">
-                <p className="text-xs dark:text-gray-500 text-gray-700 leading-6">
-                  برای دسترسی سریع، اسکن کنید:
-                </p>
-                <div className="bg-white p-2 rounded-xl shadow-lg shadow-black/20">
-                  <QRCodeCanvas
-                    value={qrUrl}
-                    size={100}
-                    level={"M"}
-                    imageSettings={{
-                      src: logoUrl,
-                      height: 24,
-                      width: 24,
-                      excavate: true
-                    }}
-                  />
-                </div>
+          {/* Tagline / motto */}
+          <div className="space-y-3">
+            <h4 className={cn("text-xs font-bold uppercase tracking-widest", textMuted)}>
+              درباره ما
+            </h4>
+            <div className="space-y-2">
+              <p className={cn("text-xs leading-5", textMuted)}>
+                جایی برای طعم خوب، فضای آرام و تجربه‌ای حرفه‌ای.
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {["کیفیت", "آرامش", "تجربه"].map(tag => (
+                  <span
+                    key={tag}
+                    className={cn(
+                      "text-[10px] font-semibold px-2.5 py-1 rounded-full",
+                      isDark
+                        ? "bg-[#186244]/15 text-[#4ade80]"
+                        : "bg-[#186244]/10 text-[#186244]"
+                    )}
+                  >
+                    {tag}
+                  </span>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div className="border-t dark:border-white/5 border-gray-400 pt-8 text-center text-xs dark:text-gray-600 text-gray-700 font-sans">
-          &copy; {new Date().getFullYear()} {siteName}. تمامی حقوق محفوظ است.
+        {/* ── Bottom bar ──────────────────────────────────────────────── */}
+        <div className={cn(
+          "flex flex-col sm:flex-row items-center justify-between gap-2",
+          "px-6 py-4 border-t text-[11px]",
+          borderCol, textMuted
+        )}>
+          <span>
+            &copy; {new Date().getFullYear()} {siteName}. تمامی حقوق محفوظ است.
+          </span>
+          <span className="flex items-center gap-1">
+            ساخته شده با <Coffee size={11} className={isDark ? "text-[#4ade80]" : "text-[#186244]"} /> در ایران
+          </span>
         </div>
       </div>
     </footer>
