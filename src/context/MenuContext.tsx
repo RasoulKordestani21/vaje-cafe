@@ -29,102 +29,94 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Sync Data with Firebase
+  // ── Auth check (once on mount) ─────────────────────────────────────────────
   useEffect(() => {
-    let unsubscribeMenu: () => void;
-    let unsubscribeOrders: () => void;
-
-    // We can fallback to localStorage/Constants if DB fails or empty initially,
-    // but here we set up the listeners.
-    try {
-      unsubscribeMenu = subscribeToMenu(fetchedItems => {
-        if (fetchedItems.length === 0) {
-          // If DB is empty, use default (dev mode convenience)
-          setItems(DEFAULT_MENU);
-        } else {
-          setItems(fetchedItems);
-        }
-        setIsLoading(false);
-      });
-
-      // Only fetch orders if admin (optimization) - but for simplicity we fetch all now
-      // in a real app, protect this query
-      unsubscribeOrders = subscribeToOrders(fetchedOrders => {
-        setOrders(fetchedOrders);
-      });
-    } catch (e) {
-      console.error("Firebase connection failed", e);
-      setItems(DEFAULT_MENU);
-      setIsLoading(false);
-    }
-
-    // Check authentication status on mount (from sessionStorage or cookie)
     const checkAuth = async () => {
-      if (typeof window !== "undefined") {
-        // First check sessionStorage
-        const auth = sessionStorage.getItem("vaje_auth");
-        const userType = sessionStorage.getItem("vaje_userType");
-        
-        if (auth === "true") {
-          setIsAuthenticated(true);
-          // Try to get role from sessionStorage
-          const role = sessionStorage.getItem("vaje_role");
-          if (role === "admin" || role === "super_admin") {
-            setUserRole(role as "admin" | "super_admin");
-          } else if (userType === "staff") {
-            // Staff is authenticated but not admin
-            setUserRole(null);
-          }
-        } else {
-          // If not in sessionStorage, verify via cookie by calling a check endpoint
-          try {
-            // Try admin auth first
-            const adminResponse = await fetch("/api/auth/validate", {
-              credentials: "include"
-            });
-            if (adminResponse.ok) {
-              const data = await adminResponse.json();
-              setIsAuthenticated(true);
-              sessionStorage.setItem("vaje_auth", "true");
-              if (data.role === "admin" || data.role === "super_admin") {
-                setUserRole(data.role);
-                sessionStorage.setItem("vaje_role", data.role);
-                sessionStorage.setItem("vaje_userType", "admin");
-              }
-            } else {
-              // Try staff auth
-              const staffResponse = await fetch("/api/staff/auth/validate", {
-                credentials: "include"
-              });
-              if (staffResponse.ok) {
-                const staffData = await staffResponse.json();
-                if (staffData.authenticated) {
-                  setIsAuthenticated(true);
-                  sessionStorage.setItem("vaje_auth", "true");
-                  sessionStorage.setItem("vaje_userType", "staff");
-                  sessionStorage.setItem("vaje_role", staffData.staff.role);
-                  sessionStorage.setItem("staff_data", JSON.stringify(staffData.staff));
-                }
+      if (typeof window === "undefined") {
+        setAuthChecked(true);
+        return;
+      }
+
+      const auth = sessionStorage.getItem("vaje_auth");
+      const userType = sessionStorage.getItem("vaje_userType");
+
+      if (auth === "true") {
+        setIsAuthenticated(true);
+        const role = sessionStorage.getItem("vaje_role");
+        if (role === "admin" || role === "super_admin") {
+          setUserRole(role as "admin" | "super_admin");
+        } else if (userType === "staff") {
+          setUserRole(null);
+        }
+      } else {
+        try {
+          const adminResponse = await fetch("/api/auth/validate", { credentials: "include" });
+          if (adminResponse.ok) {
+            const data = await adminResponse.json();
+            setIsAuthenticated(true);
+            sessionStorage.setItem("vaje_auth", "true");
+            if (data.role === "admin" || data.role === "super_admin") {
+              setUserRole(data.role);
+              sessionStorage.setItem("vaje_role", data.role);
+              sessionStorage.setItem("vaje_userType", "admin");
+            }
+          } else {
+            const staffResponse = await fetch("/api/staff/auth/validate", { credentials: "include" });
+            if (staffResponse.ok) {
+              const staffData = await staffResponse.json();
+              if (staffData.authenticated) {
+                setIsAuthenticated(true);
+                sessionStorage.setItem("vaje_auth", "true");
+                sessionStorage.setItem("vaje_userType", "staff");
+                sessionStorage.setItem("vaje_role", staffData.staff.role);
+                sessionStorage.setItem("staff_data", JSON.stringify(staffData.staff));
               }
             }
-          } catch (err) {
-            console.error("Auth validation failed:", err);
           }
+        } catch (err) {
+          console.error("Auth validation failed:", err);
         }
-
-        const storedQr = sessionStorage.getItem("vaje_qr_url");
-        if (storedQr) setQrCodeUrl(storedQr);
       }
-      setAuthChecked(true); // Mark auth check as complete
+
+      const storedQr = sessionStorage.getItem("vaje_qr_url");
+      if (storedQr) setQrCodeUrl(storedQr);
+      setAuthChecked(true);
     };
 
     checkAuth();
-
-    return () => {
-      if (unsubscribeMenu) unsubscribeMenu();
-      if (unsubscribeOrders) unsubscribeOrders();
-    };
   }, []);
+
+  const isAdminUser =
+    isAuthenticated && (userRole === "admin" || userRole === "super_admin");
+
+  // ── Menu sync — slower polling for public pages ────────────────────────────
+  useEffect(() => {
+    const intervalMs = isAdminUser ? 15_000 : 60_000;
+    const unsubscribeMenu = subscribeToMenu(fetchedItems => {
+      if (fetchedItems.length === 0) {
+        setItems(DEFAULT_MENU);
+      } else {
+        setItems(fetchedItems);
+      }
+      setIsLoading(false);
+    }, intervalMs);
+
+    return unsubscribeMenu;
+  }, [isAdminUser]);
+
+  // ── Orders sync — admin dashboard only ───────────────────────────────────
+  useEffect(() => {
+    if (!isAdminUser) {
+      setOrders([]);
+      return;
+    }
+
+    const unsubscribeOrders = subscribeToOrders(fetchedOrders => {
+      setOrders(fetchedOrders);
+    }, 15_000);
+
+    return unsubscribeOrders;
+  }, [isAdminUser]);
 
   const addItem = async (newItem: Omit<MenuItem, "id">, imageFile?: File) => {
     await addMenuItemToDB(newItem, imageFile);

@@ -37,8 +37,10 @@ export const getMenuItems = async (): Promise<MenuItem[]> => {
   }
 };
 
-export const subscribeToMenu = (callback: (items: MenuItem[]) => void) => {
-  // Simple polling fallback for reactivity (poll every 3s).
+export const subscribeToMenu = (
+  callback: (items: MenuItem[]) => void,
+  intervalMs = 60_000
+) => {
   let mounted = true;
 
   const fetchAndCallback = async () => {
@@ -50,14 +52,12 @@ export const subscribeToMenu = (callback: (items: MenuItem[]) => void) => {
     }
   };
 
-  // Initial fetch
   fetchAndCallback();
-  const id = setInterval(fetchAndCallback, 3000);
+  const id = setInterval(fetchAndCallback, intervalMs);
 
-  // Return unsubscribe function
   return () => {
     mounted = false;
-    clearInterval(id as unknown as number);
+    clearInterval(id);
   };
 };
 
@@ -167,7 +167,10 @@ export const deleteMenuItemFromDB = async (id: string): Promise<void> => {
 
 // --- ORDER OPERATIONS ---
 
-export const subscribeToOrders = (callback: (orders: Order[]) => void) => {
+export const subscribeToOrders = (
+  callback: (orders: Order[]) => void,
+  intervalMs = 15_000
+) => {
   let mounted = true;
 
   const fetchAndCallback = async () => {
@@ -182,11 +185,11 @@ export const subscribeToOrders = (callback: (orders: Order[]) => void) => {
   };
 
   fetchAndCallback();
-  const id = setInterval(fetchAndCallback, 3000);
+  const id = setInterval(fetchAndCallback, intervalMs);
 
   return () => {
     mounted = false;
-    clearInterval(id as unknown as number);
+    clearInterval(id);
   };
 };
 
