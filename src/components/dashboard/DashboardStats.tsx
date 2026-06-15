@@ -2,17 +2,25 @@
 
 import React from "react";
 import {
-    ArrowDown,
-    ArrowUp,
-    BarChart3,
-    Coffee,
-    DollarSign,
-    TrendingUp,
-    Users
-  } from "lucide-react";
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Coffee,
+  DollarSign,
+  ShoppingBag,
+  TrendingUp,
+  Users
+} from "lucide-react";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
 import { AdminCharts } from "@/components/AdminCharts";
+import { AdminStatCard } from "@/components/dashboard/AdminStatCard";
 import { formatToman, toPersianDigits } from "@/utils/format";
+import { cn } from "@/lib/utils";
+import {
+  adminCard,
+  adminTextPrimary,
+  adminTextMuted
+} from "@/lib/adminTheme";
 
 interface DateRange {
   from: string;
@@ -32,15 +40,18 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
   onDateRangeChange,
   isDark
 }) => {
+  const cardClass = cn("p-5 rounded-2xl border", adminCard(isDark));
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Date Range Filter */}
       <div
-        className={`p-4 rounded-2xl border flex flex-row sm:flex-col gap-4 items-end ${
-          isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-        }`}
+        className={cn(
+          cardClass,
+          "flex flex-col md:flex-row gap-4 md:items-end"
+        )}
       >
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <ScrollingJalaliDatePicker
             value={dateRange.from}
             onChange={value =>
@@ -50,7 +61,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
             isDark={isDark}
           />
         </div>
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <ScrollingJalaliDatePicker
             value={dateRange.to}
             onChange={value =>
@@ -61,513 +72,245 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({
           />
         </div>
         <button
+          type="button"
           onClick={() => onDateRangeChange({ from: "", to: "" })}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${
+          className={cn(
+            "px-4 py-2 rounded-lg text-sm font-medium shrink-0",
             isDark
-              ? "bg-neutral-800 hover:bg-neutral-700 text-gray-300"
-              : "bg-gray-200 hover:bg-gray-300 text-gray-900"
-          }`}
+              ? "bg-white/5 hover:bg-white/10 text-gray-300"
+              : "bg-admin-muted border border-admin-border text-admin-secondary hover:bg-slate-200/70"
+          )}
         >
           بازنشانی
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Sales */}
-        <div
-          className={`p-6 rounded-2xl border shadow-lg flex items-center gap-4 ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-emerald-200"
-          }`}
-        >
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              isDark
-                ? "bg-emerald-900/30 text-emerald-500"
-                : "bg-emerald-100 text-emerald-600"
-            }`}
-          >
-            <DollarSign size={24} />
-          </div>
-          <div>
-            <p
-              className={`text-sm mb-1 ${
-                isDark ? "text-gray-400" : "text-gray-600"
-              }`}
-            >
-              فروش کل
-            </p>
-            <h3
-              className={`text-2xl font-bold font-serif ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {formatToman(stats.totalSales)}
-            </h3>
-            <p
-              className={`text-xs mt-1 ${
-                isDark ? "text-gray-500" : "text-gray-500"
-              }`}
-            >
-              تومان
-            </p>
-          </div>
-        </div>
-
-        {/* Orders Count */}
-        <div
-          className={`p-6 rounded-2xl border shadow-lg flex items-center gap-4 ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-blue-200"
-          }`}
-        >
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              isDark
-                ? "bg-blue-900/30 text-blue-500"
-                : "bg-blue-100 text-blue-600"
-            }`}
-          >
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <p
-              className={`text-sm mb-1 ${
-                isDark ? "text-gray-400" : "text-gray-600"
-              }`}
-            >
-              تعداد سفارشات
-            </p>
-            <h3
-              className={`text-2xl font-bold font-serif ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {toPersianDigits(stats.ordersCount)}
-            </h3>
-            <p
-              className={`text-xs mt-1 ${
-                isDark ? "text-gray-500" : "text-gray-500"
-              }`}
-            >
-              سفارش
-            </p>
-          </div>
-        </div>
-
-        {/* Visits */}
-        <div
-          className={`p-6 rounded-2xl border shadow-lg flex items-center gap-4 ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-purple-200"
-          }`}
-        >
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              isDark
-                ? "bg-purple-900/30 text-purple-500"
-                : "bg-purple-100 text-purple-600"
-            }`}
-          >
-            <Users size={24} />
-          </div>
-          <div>
-            <p
-              className={`text-sm mb-1 ${
-                isDark ? "text-gray-400" : "text-gray-600"
-              }`}
-            >
-              بازدید سایت
-            </p>
-            <h3
-              className={`text-2xl font-bold font-serif ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {toPersianDigits(stats.visits)}
-            </h3>
-            <p
-              className={`text-xs mt-1 ${
-                isDark ? "text-gray-500" : "text-gray-500"
-              }`}
-            >
-              بازدید
-            </p>
-          </div>
-        </div>
-
-        {/* Menu Views */}
-        <div
-          className={`p-6 rounded-2xl border shadow-lg flex items-center gap-4 ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-amber-200"
-          }`}
-        >
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              isDark
-                ? "bg-amber-900/30 text-amber-500"
-                : "bg-amber-100 text-amber-600"
-            }`}
-          >
-            <Coffee size={24} />
-          </div>
-          <div>
-            <p
-              className={`text-sm mb-1 ${
-                isDark ? "text-gray-400" : "text-gray-600"
-              }`}
-            >
-              بازدید منو
-            </p>
-            <h3
-              className={`text-2xl font-bold font-serif ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {toPersianDigits(stats.menuViews)}
-            </h3>
-            <p
-              className={`text-xs mt-1 ${
-                isDark ? "text-gray-500" : "text-gray-500"
-              }`}
-            >
-              بازدید
-            </p>
-          </div>
-        </div>
+      {/* KPI Cards: mobile 2 → tablet 3 → desktop 4 (mobile-first) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <AdminStatCard
+          label="فروش کل"
+          value={formatToman(stats.totalSales)}
+          sublabel="تومان"
+          icon={DollarSign}
+          iconBg={isDark ? "bg-emerald-500/15" : "bg-emerald-50"}
+          iconColor={isDark ? "text-emerald-400" : "text-emerald-600"}
+          isDark={isDark}
+        />
+        <AdminStatCard
+          label="تعداد سفارشات"
+          value={toPersianDigits(stats.ordersCount?.toString() ?? "0")}
+          sublabel="سفارش"
+          icon={ShoppingBag}
+          iconBg={isDark ? "bg-blue-500/15" : "bg-blue-50"}
+          iconColor={isDark ? "text-blue-400" : "text-blue-600"}
+          isDark={isDark}
+        />
+        <AdminStatCard
+          label="بازدید سایت"
+          value={toPersianDigits(stats.visits?.toString() ?? "0")}
+          sublabel="بازدید"
+          icon={Users}
+          iconBg={isDark ? "bg-violet-500/15" : "bg-violet-50"}
+          iconColor={isDark ? "text-violet-400" : "text-violet-600"}
+          isDark={isDark}
+        />
+        <AdminStatCard
+          label="بازدید منو"
+          value={toPersianDigits(stats.menuViews?.toString() ?? "0")}
+          sublabel="بازدید"
+          icon={Coffee}
+          iconBg={isDark ? "bg-amber-500/15" : "bg-amber-50"}
+          iconColor={isDark ? "text-amber-400" : "text-amber-600"}
+          isDark={isDark}
+        />
       </div>
 
-      {/* Comparison Cards */}
-      {stats.comparisonData && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Today vs Yesterday */}
-          <div
-            className={`p-6 rounded-2xl border ${
-              isDark
-                ? "bg-neutral-900 border-white/5"
-                : "bg-white border-gray-300"
-            }`}
-          >
-            <h3
-              className={`text-lg font-bold mb-4 ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              امروز در مقابل دیروز
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isDark ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  سفارشات
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {toPersianDigits(
-                      stats.comparisonData.todayVsYesterday.orders.toString()
-                    )}
-                  </span>
-                  {stats.comparisonData.todayVsYesterday.ordersChange !== 0 && (
-                    <span
-                      className={`flex items-center gap-1 text-sm ${
-                        stats.comparisonData.todayVsYesterday.ordersChange > 0
-                          ? "text-green-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {stats.comparisonData.todayVsYesterday.ordersChange > 0 ? (
-                        <ArrowUp size={16} />
-                      ) : (
-                        <ArrowDown size={16} />
-                      )}
-                      {Math.abs(
-                        Math.round(
-                          stats.comparisonData.todayVsYesterday.ordersChange
-                        )
-                      )}
-                      %
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isDark ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  فروش
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {formatToman(
-                      stats.comparisonData.todayVsYesterday.sales
-                    )}
-                  </span>
-                  {stats.comparisonData.todayVsYesterday.salesChange !== 0 && (
-                    <span
-                      className={`flex items-center gap-1 text-sm ${
-                        stats.comparisonData.todayVsYesterday.salesChange > 0
-                          ? "text-green-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {stats.comparisonData.todayVsYesterday.salesChange > 0 ? (
-                        <ArrowUp size={16} />
-                      ) : (
-                        <ArrowDown size={16} />
-                      )}
-                      {Math.abs(
-                        Math.round(
-                          stats.comparisonData.todayVsYesterday.salesChange
-                        )
-                      )}
-                      %
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* This Week vs Last Week */}
-          <div
-            className={`p-6 rounded-2xl border ${
-              isDark
-                ? "bg-neutral-900 border-white/5"
-                : "bg-white border-gray-300"
-            }`}
-          >
-            <h3
-              className={`text-lg font-bold mb-4 ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              این هفته در مقابل هفته گذشته
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isDark ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  سفارشات
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {toPersianDigits(
-                      stats.comparisonData.thisWeekVsLastWeek.orders.toString()
-                    )}
-                  </span>
-                  {stats.comparisonData.thisWeekVsLastWeek.ordersChange !==
-                    0 && (
-                    <span
-                      className={`flex items-center gap-1 text-sm ${
-                        stats.comparisonData.thisWeekVsLastWeek.ordersChange > 0
-                          ? "text-green-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {stats.comparisonData.thisWeekVsLastWeek.ordersChange >
-                      0 ? (
-                        <ArrowUp size={16} />
-                      ) : (
-                        <ArrowDown size={16} />
-                      )}
-                      {Math.abs(
-                        Math.round(
-                          stats.comparisonData.thisWeekVsLastWeek.ordersChange
-                        )
-                      )}
-                      %
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-sm ${
-                    isDark ? "text-gray-400" : "text-gray-600"
-                  }`}
-                >
-                  فروش
-                </span>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-bold ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {formatToman(
-                      stats.comparisonData.thisWeekVsLastWeek.sales
-                    )}
-                  </span>
-                  {stats.comparisonData.thisWeekVsLastWeek.salesChange !==
-                    0 && (
-                    <span
-                      className={`flex items-center gap-1 text-sm ${
-                        stats.comparisonData.thisWeekVsLastWeek.salesChange > 0
-                          ? "text-green-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {stats.comparisonData.thisWeekVsLastWeek.salesChange >
-                      0 ? (
-                        <ArrowUp size={16} />
-                      ) : (
-                        <ArrowDown size={16} />
-                      )}
-                      {Math.abs(
-                        Math.round(
-                          stats.comparisonData.thisWeekVsLastWeek.salesChange
-                        )
-                      )}
-                      %
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Average Order Value Card */}
-      {stats.averageOrderValue > 0 && (
-        <div
-          className={`p-6 rounded-2xl border ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-gray-300"
-          }`}
-        >
-          <div className="flex items-center gap-4">
-            <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                isDark
-                  ? "bg-purple-900/30 text-purple-500"
-                  : "bg-purple-100 text-purple-600"
-              }`}
-            >
-              <BarChart3 size={24} />
-            </div>
-            <div>
-              <p
-                className={`text-sm mb-1 ${
-                  isDark ? "text-gray-400" : "text-gray-600"
-                }`}
-              >
-                میانگین ارزش سفارش
-              </p>
-              <h3
-                className={`text-2xl font-bold font-serif ${
-                  isDark ? "text-white" : "text-gray-900"
-                }`}
-              >
-                {formatToman(stats.averageOrderValue)}
+      {/* Comparison + avg — 3 columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {stats.comparisonData && (
+          <>
+            <div className={cardClass}>
+              <h3 className={cn("text-sm font-bold mb-4", adminTextPrimary(isDark))}>
+                امروز در مقابل دیروز
               </h3>
+              <div className="space-y-3">
+                <ComparisonRow
+                  label="سفارشات"
+                  value={toPersianDigits(
+                    stats.comparisonData.todayVsYesterday.orders.toString()
+                  )}
+                  change={stats.comparisonData.todayVsYesterday.ordersChange}
+                  isDark={isDark}
+                />
+                <ComparisonRow
+                  label="فروش"
+                  value={formatToman(stats.comparisonData.todayVsYesterday.sales)}
+                  change={stats.comparisonData.todayVsYesterday.salesChange}
+                  isDark={isDark}
+                />
+              </div>
+            </div>
+            <div className={cardClass}>
+              <h3 className={cn("text-sm font-bold mb-4", adminTextPrimary(isDark))}>
+                این هفته در مقابل هفته گذشته
+              </h3>
+              <div className="space-y-3">
+                <ComparisonRow
+                  label="سفارشات"
+                  value={toPersianDigits(
+                    stats.comparisonData.thisWeekVsLastWeek.orders.toString()
+                  )}
+                  change={stats.comparisonData.thisWeekVsLastWeek.ordersChange}
+                  isDark={isDark}
+                />
+                <ComparisonRow
+                  label="فروش"
+                  value={formatToman(
+                    stats.comparisonData.thisWeekVsLastWeek.sales
+                  )}
+                  change={stats.comparisonData.thisWeekVsLastWeek.salesChange}
+                  isDark={isDark}
+                />
+              </div>
+            </div>
+          </>
+        )}
+        {stats.averageOrderValue > 0 && (
+          <div className={cardClass}>
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "w-11 h-11 rounded-xl flex items-center justify-center",
+                  isDark ? "bg-purple-500/15" : "bg-purple-50"
+                )}
+              >
+                <BarChart3
+                  size={22}
+                  className={isDark ? "text-purple-400" : "text-purple-600"}
+                />
+              </div>
+              <div>
+                <p
+                  className={cn(
+                    "text-sm",
+                    isDark ? "text-gray-400" : "text-gray-500"
+                  )}
+                >
+                  میانگین ارزش سفارش
+                </p>
+                <p
+                  className={cn(
+                    "text-xl font-bold",
+                    isDark ? "text-white" : "text-gray-900"
+                  )}
+                >
+                  {formatToman(stats.averageOrderValue)}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Top Selling Items */}
+      {/* Top sellers — 3 column cards */}
       {stats.topSellingItems && stats.topSellingItems.length > 0 && (
-        <div
-          className={`p-6 rounded-2xl border ${
-            isDark
-              ? "bg-neutral-900 border-white/5"
-              : "bg-white border-gray-300"
-          }`}
-        >
-          <h3
-            className={`text-lg font-bold mb-4 ${
-              isDark ? "text-white" : "text-gray-900"
-            }`}
-          >
+        <div>
+          <h3 className={cn("text-sm font-bold mb-4", adminTextPrimary(isDark))}>
             پرفروش‌ترین آیتم‌ها
           </h3>
-          <div className="space-y-3">
-            {stats.topSellingItems.slice(0, 5).map((item: any, index: number) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stats.topSellingItems.slice(0, 6).map((item: any, index: number) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-neutral-800/50"
+                className={cn(
+                  "p-4 rounded-2xl border flex items-center gap-3",
+                  adminCard(isDark)
+                )}
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      index === 0
+                <span
+                  className={cn(
+                    "w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0",
+                    index === 0
+                      ? isDark
                         ? "bg-yellow-500/20 text-yellow-400"
-                        : index === 1
-                        ? "bg-gray-500/20 text-gray-400"
+                        : "bg-yellow-50 text-yellow-600"
+                      : index === 1
+                        ? isDark
+                          ? "bg-gray-500/20 text-gray-300"
+                          : "bg-gray-100 text-gray-600"
                         : index === 2
-                        ? "bg-amber-500/20 text-amber-400"
-                        : "bg-neutral-700 text-gray-400"
-                    }`}
-                  >
-                    {toPersianDigits((index + 1).toString())}
-                  </span>
-                  <span
-                    className={`font-medium ${
-                      isDark ? "text-white" : "text-gray-900"
-                    }`}
-                  >
+                          ? isDark
+                            ? "bg-amber-500/20 text-amber-400"
+                            : "bg-amber-50 text-amber-600"
+                          : isDark
+                            ? "bg-white/5 text-gray-400"
+                            : "bg-admin-muted text-admin-secondary"
+                  )}
+                >
+                  {toPersianDigits((index + 1).toString())}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={cn("font-semibold text-sm truncate", adminTextPrimary(isDark))}>
                     {item.name}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span
-                    className={`text-sm ${
-                      isDark ? "text-gray-400" : "text-gray-600"
-                    }`}
-                  >
+                  </p>
+                  <p className={cn("text-xs mt-0.5", adminTextMuted(isDark))}>
                     {toPersianDigits(item.quantity.toString())} عدد
-                  </span>
-                  <span
-                    className={`font-bold ${
-                      isDark ? "text-emerald-400" : "text-emerald-600"
-                    }`}
-                  >
-                    {formatToman(item.revenue)}
-                  </span>
+                  </p>
                 </div>
+                <span
+                  className={cn(
+                    "text-sm font-bold shrink-0",
+                    isDark ? "text-emerald-400" : "text-emerald-600"
+                  )}
+                >
+                  {formatToman(item.revenue)}
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Charts Section */}
+      {/* Charts */}
       <AdminCharts stats={stats} />
     </div>
   );
 };
 
+function ComparisonRow({
+  label,
+  value,
+  change,
+  isDark
+}: {
+  label: string;
+  value: string;
+  change: number;
+  isDark: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className={cn("text-sm", adminTextMuted(isDark))}>
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <span className={cn("font-bold text-sm", adminTextPrimary(isDark))}>
+          {value}
+        </span>
+        {change !== 0 && (
+          <span
+            className={cn(
+              "flex items-center gap-0.5 text-xs font-medium",
+              change > 0 ? "text-emerald-500" : "text-red-500"
+            )}
+          >
+            {change > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+            {Math.abs(Math.round(change))}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default DashboardStats;
-
-
-
-
-

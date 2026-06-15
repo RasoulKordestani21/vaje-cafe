@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
 
 initializeDatabase();
+
+function parseExpenseDate(value: string | number): number {
+  if (typeof value === "number") return value;
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const year = parseInt(value.split("-")[0], 10);
+    if (year >= 1300 && year <= 1500) return jalaliToTimestamp(value);
+  }
+  return Math.floor(new Date(value).getTime() / 1000);
+}
 
 // GET single expense
 export async function GET(
@@ -10,18 +21,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only admins can view expenses
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const expense = db.prepare("SELECT * FROM expenses WHERE id = ?").get(params.id) as any;
@@ -46,18 +47,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only admins can update expenses
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const { category, amount, description, date } = body;
@@ -103,7 +94,7 @@ export async function PUT(
     }
 
     if (date !== undefined) {
-      const dateTimestamp = typeof date === "string" ? Math.floor(new Date(date).getTime() / 1000) : date;
+      const dateTimestamp = parseExpenseDate(date);
       updates.push("date = ?");
       values.push(dateTimestamp);
     }
@@ -136,18 +127,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only admins can delete expenses
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const existing = db.prepare("SELECT id FROM expenses WHERE id = ?").get(params.id) as { id: string } | undefined;

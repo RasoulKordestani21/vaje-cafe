@@ -1,20 +1,49 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { MessageSquare, Check, X, Trash2, Reply, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  MessageSquare,
+  Check,
+  Trash2,
+  Reply,
+  Loader2,
+  Mail,
+  Phone,
+  Star,
+  ShoppingBag,
+  Inbox,
+  MailOpen,
+  Pencil,
+  X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { formatJalaliDate, timestampToJalali } from "@/utils/jalaliDateUtils";
-import { toPersianDigits } from "@/utils/format";
+import { formatPersianNumber, timestampToJalaliString } from "@/utils/dateFormatter";
+import { formatToman, toPersianDigits } from "@/utils/format";
 import { getAuthHeaders } from "@/services/dbService";
+import CustomerAvatar from "@/components/customers/CustomerAvatar";
+import {
+  adminCard,
+  adminDivider,
+  adminInput,
+  adminMutedSurface,
+  adminTextMuted,
+  adminTextPrimary,
+  adminTextSecondary
+} from "@/lib/adminTheme";
 
 interface CustomerMessage {
   id: string;
   customer_id: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_email?: string | null;
+  customer_profile_picture?: string | null;
+  customer_total_orders?: number;
+  customer_total_spent?: number;
+  customer_loyalty_points?: number;
   subject?: string;
   message: string;
   admin_read: boolean;
@@ -28,46 +57,137 @@ interface CustomerMessagesManagerProps {
   isDark: boolean;
 }
 
+function StatusBadge({
+  label,
+  variant,
+  isDark
+}: {
+  label: string;
+  variant: "unread" | "replied" | "read";
+  isDark: boolean;
+}) {
+  const styles = {
+    unread: isDark
+      ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
+      : "bg-blue-50 text-blue-700 border-blue-200",
+    replied: isDark
+      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+      : "bg-emerald-50 text-emerald-700 border-emerald-200",
+    read: isDark
+      ? "bg-white/5 text-gray-400 border-white/10"
+      : "bg-admin-muted text-admin-muted-text border-admin-border"
+  };
+  return (
+    <span className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium", styles[variant])}>
+      {label}
+    </span>
+  );
+}
+
+function CustomerInfoCard({
+  msg,
+  isDark
+}: {
+  msg: CustomerMessage;
+  isDark: boolean;
+}) {
+  const name = msg.customer_name || "بدون نام";
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-xl border",
+        adminMutedSurface(isDark),
+        isDark ? "border-white/10" : "border-admin-border"
+      )}
+    >
+      <CustomerAvatar
+        profilePicture={msg.customer_profile_picture}
+        name={msg.customer_name}
+        phone={msg.customer_phone}
+        size="lg"
+        isDark={isDark}
+      />
+      <div className="flex-1 min-w-0 space-y-2">
+        <p className={cn("font-bold text-sm", adminTextPrimary(isDark))}>{name}</p>
+        {msg.customer_phone && (
+          <p className={cn("text-xs flex items-center gap-1.5", adminTextSecondary(isDark))} dir="ltr">
+            <Phone size={12} className="shrink-0 opacity-70" />
+            {msg.customer_phone}
+          </p>
+        )}
+        {msg.customer_email && (
+          <p className={cn("text-xs flex items-center gap-1.5 truncate", adminTextSecondary(isDark))} dir="ltr">
+            <Mail size={12} className="shrink-0 opacity-70" />
+            {msg.customer_email}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2 pt-1">
+          {msg.customer_loyalty_points != null && msg.customer_loyalty_points > 0 && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full",
+                isDark ? "bg-yellow-500/10 text-yellow-400" : "bg-yellow-50 text-yellow-700"
+              )}
+            >
+              <Star size={11} className="fill-yellow-500 text-yellow-500" />
+              {toPersianDigits(msg.customer_loyalty_points.toString())} امتیاز
+            </span>
+          )}
+          {msg.customer_total_orders != null && msg.customer_total_orders > 0 && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full",
+                isDark ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-700"
+              )}
+            >
+              <ShoppingBag size={11} />
+              {toPersianDigits(msg.customer_total_orders.toString())} سفارش
+            </span>
+          )}
+          {msg.customer_total_spent != null && msg.customer_total_spent > 0 && (
+            <span
+              className={cn(
+                "text-[11px] px-2 py-0.5 rounded-full",
+                isDark ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
+              {formatToman(msg.customer_total_spent)}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDark }) => {
   const [messages, setMessages] = useState<CustomerMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<CustomerMessage | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editSubject, setEditSubject] = useState("");
+  const [editMessage, setEditMessage] = useState("");
+  const [editReply, setEditReply] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "unread" | "replied">("all");
 
   const fetchMessages = async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await fetch("/api/customer-messages", {
-        headers: getAuthHeaders(),
+        credentials: "include",
+        headers: getAuthHeaders()
       });
-      if (!response.ok) {
-        throw new Error("Failed to fetch messages");
-      }
+      if (!response.ok) throw new Error("Failed to fetch messages");
       const data = await response.json();
-      // Group messages by subject (ticket system)
-      const tickets: { [key: string]: CustomerMessage[] } = {};
-      (data.messages || []).forEach((msg: CustomerMessage) => {
-        const ticketKey = msg.subject || "بدون موضوع";
-        if (!tickets[ticketKey]) {
-          tickets[ticketKey] = [];
-        }
-        tickets[ticketKey].push(msg);
-      });
-      
-      // Sort messages within each ticket by date
-      Object.keys(tickets).forEach(key => {
-        tickets[key].sort((a, b) => b.createdAt - a.createdAt);
-      });
-      
-      // Flatten back to array but keep ticket grouping info
-      const groupedMessages = Object.entries(tickets).flatMap(([subject, msgs]) => msgs);
-      setMessages(groupedMessages);
-    } catch (err: any) {
+      setMessages(data.messages || []);
+    } catch (err: unknown) {
       console.error("Failed to fetch messages:", err);
-      setError(err.message);
+      setError(err instanceof Error ? err.message : "خطا در بارگذاری");
     } finally {
       setLoading(false);
     }
@@ -77,63 +197,98 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
     fetchMessages();
   }, []);
 
+  const handleUpdate = async (
+    messageId: string,
+    patch: {
+      subject?: string;
+      message?: string;
+      admin_reply?: string;
+      admin_replied?: boolean;
+      admin_read?: boolean;
+    }
+  ) => {
+    try {
+      setProcessing(messageId);
+      const response = await fetch(`/api/customer-messages/${messageId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
+        body: JSON.stringify(patch)
+      });
+      if (response.ok) {
+        await fetchMessages();
+        setIsEditing(false);
+      }
+    } catch (err) {
+      console.error("Failed to update message:", err);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleSaveEdit = async (messageId: string) => {
+    if (!editMessage.trim()) return;
+    await handleUpdate(messageId, {
+      subject: editSubject.trim() || undefined,
+      message: editMessage.trim(),
+      admin_reply: editReply.trim() || undefined,
+      admin_replied: editReply.trim().length > 0
+    });
+  };
+
+  const startEditing = (msg: CustomerMessage) => {
+    setIsEditing(true);
+    setEditSubject(msg.subject || "");
+    setEditMessage(msg.message);
+    setEditReply(msg.admin_reply || "");
+    setReplyText("");
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditSubject("");
+    setEditMessage("");
+    setEditReply("");
+  };
+
   const handleMarkAsRead = async (messageId: string, read: boolean) => {
     try {
       setProcessing(messageId);
       const response = await fetch(`/api/customer-messages/${messageId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({ admin_read: read }),
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
+        body: JSON.stringify({ admin_read: read })
       });
-
-      if (response.ok) {
-        await fetchMessages();
-      } else {
-        alert("خطا در تغییر وضعیت پیام");
-      }
-    } catch (error) {
-      console.error("Failed to update message:", error);
-      alert("خطا در تغییر وضعیت پیام");
+      if (response.ok) await fetchMessages();
+    } catch (err) {
+      console.error("Failed to update message:", err);
     } finally {
       setProcessing(null);
     }
   };
 
   const handleReply = async (messageId: string) => {
-    if (!replyText.trim()) {
-      alert("لطفا پاسخ را وارد کنید");
-      return;
-    }
-
+    if (!replyText.trim()) return;
     try {
       setProcessing(messageId);
       const response = await fetch(`/api/customer-messages/${messageId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           admin_replied: true,
           admin_reply: replyText.trim(),
-          admin_read: true,
-        }),
+          admin_read: true
+        })
       });
-
       if (response.ok) {
-        alert("پاسخ با موفقیت ثبت شد");
         setReplyText("");
         setSelectedMessage(null);
         await fetchMessages();
-      } else {
-        alert("خطا در ثبت پاسخ");
       }
-    } catch (error) {
-      console.error("Failed to reply:", error);
-      alert("خطا در ثبت پاسخ");
+    } catch (err) {
+      console.error("Failed to reply:", err);
     } finally {
       setProcessing(null);
     }
@@ -141,31 +296,60 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
 
   const handleDelete = async (messageId: string) => {
     if (!confirm("آیا از حذف این پیام اطمینان دارید؟")) return;
-
     try {
       setProcessing(messageId);
       const response = await fetch(`/api/customer-messages/${messageId}`, {
         method: "DELETE",
-        headers: getAuthHeaders(),
+        credentials: "include",
+        headers: getAuthHeaders()
       });
-
       if (response.ok) {
         await fetchMessages();
         if (selectedMessage?.id === messageId) {
           setSelectedMessage(null);
+          cancelEditing();
         }
-      } else {
-        alert("خطا در حذف پیام");
       }
-    } catch (error) {
-      console.error("Failed to delete message:", error);
-      alert("خطا در حذف پیام");
+    } catch (err) {
+      console.error("Failed to delete message:", err);
     } finally {
       setProcessing(null);
     }
   };
 
+  const selectMessage = (msg: CustomerMessage) => {
+    setSelectedMessage(msg);
+    setReplyText("");
+    setIsEditing(false);
+    if (!msg.admin_read) handleMarkAsRead(msg.id, true);
+  };
+
+  const filteredMessages = useMemo(() => {
+    let list = [...messages];
+    if (filter === "unread") list = list.filter(m => !m.admin_read);
+    if (filter === "replied") list = list.filter(m => m.admin_replied);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        m =>
+          (m.customer_name?.toLowerCase().includes(q) ?? false) ||
+          (m.customer_phone?.includes(q) ?? false) ||
+          (m.customer_email?.toLowerCase().includes(q) ?? false) ||
+          (m.subject?.toLowerCase().includes(q) ?? false) ||
+          m.message.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [messages, filter, search]);
+
   const unreadCount = messages.filter(m => !m.admin_read).length;
+  const repliedCount = messages.filter(m => m.admin_replied).length;
+  const inputClass = cn("w-full", adminInput(isDark));
+
+  // Keep selected message in sync after refresh
+  const activeMessage = selectedMessage
+    ? messages.find(m => m.id === selectedMessage.id) ?? selectedMessage
+    : null;
 
   if (loading) {
     return (
@@ -177,205 +361,335 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
 
   if (error) {
     return (
-      <div className={cn("text-center py-8", isDark ? "text-red-400" : "text-red-600")}>
+      <div className={cn("text-center py-8 text-sm", isDark ? "text-red-400" : "text-red-600")}>
         خطا در بارگذاری پیام‌ها: {error}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className={cn("text-2xl font-bold", isDark ? "text-white" : "text-gray-900")}>
-          پیام‌های مشتریان
-        </h2>
-        {unreadCount > 0 && (
-          <span className={cn("px-3 py-1 rounded-full text-sm font-medium", isDark ? "bg-red-900/30 text-red-400" : "bg-red-100 text-red-600")}>
-            {toPersianDigits(unreadCount.toString())} پیام خوانده نشده
-          </span>
-        )}
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
+      {/* Header + stats */}
+      <div className={cn("p-4 rounded-2xl border", adminCard(isDark))}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h2 className={cn("text-base font-bold flex items-center gap-2", adminTextPrimary(isDark))}>
+              <MessageSquare size={18} className="text-coffee-500" />
+              پیام‌های مشتریان
+            </h2>
+            <p className={cn("text-sm mt-1", adminTextMuted(isDark))}>
+              مشاهده و پاسخ به پیام‌های مشتریان
+            </p>
+          </div>
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="جستجو نام، تلفن، موضوع، متن..."
+            className={cn(inputClass, "max-w-sm")}
+            dir="rtl"
+          />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { key: "all" as const, label: "همه", count: messages.length, icon: Inbox },
+            { key: "unread" as const, label: "خوانده نشده", count: unreadCount, icon: Mail },
+            { key: "replied" as const, label: "پاسخ داده شده", count: repliedCount, icon: MailOpen }
+          ].map(({ key, label, count, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={cn(
+                "p-3 rounded-xl border text-right transition-colors",
+                filter === key
+                  ? isDark
+                    ? "border-coffee-500/40 bg-coffee-500/10"
+                    : "border-coffee-300 bg-coffee-50"
+                  : adminMutedSurface(isDark),
+                isDark ? "border-white/10 hover:border-white/15" : "border-admin-border hover:border-admin-border-strong"
+              )}
+            >
+              <div className={cn("text-xs mb-1 flex items-center gap-1", adminTextMuted(isDark))}>
+                <Icon size={13} />
+                {label}
+              </div>
+              <div className={cn("text-xl font-bold", adminTextPrimary(isDark))}>
+                {formatPersianNumber(count)}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Messages List */}
-        <Card className={cn(isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-200")}>
-          <CardHeader className={cn("border-b", isDark ? "border-white/5" : "border-gray-200")}>
-            <CardTitle className={cn("text-lg", isDark ? "text-white" : "text-gray-900")}>
-              لیست پیام‌ها ({toPersianDigits(messages.length.toString())})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {messages.length === 0 ? (
-              <div className={cn("p-6 text-center", isDark ? "text-gray-500" : "text-gray-600")}>
-                هیچ پیامی دریافت نشده است.
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "p-4 cursor-pointer transition-colors",
-                      isDark
-                        ? msg.admin_read
-                          ? "hover:bg-neutral-800"
-                          : "bg-blue-900/20 hover:bg-blue-900/30 border-r-4 border-blue-500"
-                        : msg.admin_read
-                        ? "hover:bg-gray-50"
-                        : "bg-blue-50 hover:bg-blue-100 border-r-4 border-blue-500",
-                      selectedMessage?.id === msg.id && (isDark ? "bg-coffee-900/30" : "bg-coffee-50")
-                    )}
-                    onClick={() => {
-                      setSelectedMessage(msg);
-                      if (!msg.admin_read) {
-                        handleMarkAsRead(msg.id, true);
-                      }
-                    }}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          {!msg.admin_read && (
-                            <span className={cn("w-2 h-2 rounded-full", isDark ? "bg-blue-400" : "bg-blue-500")} />
-                          )}
-                          <h4 className={cn("font-semibold", isDark ? "text-white" : "text-gray-900")}>
-                            {msg.subject || "بدون موضوع"}
-                          </h4>
-                        </div>
-                        <p className={cn("text-sm line-clamp-2", isDark ? "text-gray-400" : "text-gray-600")}>
-                          {msg.message}
-                        </p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className={cn("text-xs", isDark ? "text-gray-500" : "text-gray-500")}>
-                            {msg.customer_name || msg.customer_phone || "مشتری"}
-                          </span>
-                          <span className={cn("text-xs", isDark ? "text-gray-500" : "text-gray-500")}>
-                            {formatJalaliDate(timestampToJalali(msg.createdAt))}
-                          </span>
-                        </div>
-                      </div>
-                      {msg.admin_replied && (
-                        <Reply size={16} className={cn("text-green-500", isDark ? "text-green-400" : "text-green-600")} />
-                      )}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* List */}
+        <div className={cn("lg:col-span-2 rounded-2xl border overflow-hidden", adminCard(isDark))}>
+          <div className={cn("px-4 py-3 border-b text-sm font-bold", adminDivider(isDark), adminTextPrimary(isDark))}>
+            لیست پیام‌ها ({formatPersianNumber(filteredMessages.length)})
+          </div>
+          {filteredMessages.length === 0 ? (
+            <p className={cn("p-8 text-center text-sm", adminTextMuted(isDark))}>
+              {search || filter !== "all" ? "پیامی یافت نشد" : "هیچ پیامی دریافت نشده است"}
+            </p>
+          ) : (
+            <div className="max-h-[620px] overflow-y-auto divide-y divide-white/5">
+              {filteredMessages.map(msg => (
+                <button
+                  key={msg.id}
+                  type="button"
+                  onClick={() => selectMessage(msg)}
+                  className={cn(
+                    "w-full text-right p-4 transition-colors flex items-start gap-3",
+                    !msg.admin_read &&
+                      (isDark ? "bg-blue-500/5 border-r-2 border-blue-500" : "bg-blue-50/80 border-r-2 border-blue-400"),
+                    activeMessage?.id === msg.id
+                      ? isDark
+                        ? "bg-coffee-500/10"
+                        : "bg-coffee-50"
+                      : isDark
+                        ? "hover:bg-white/[0.03]"
+                        : "hover:bg-admin-muted/60"
+                  )}
+                >
+                  <CustomerAvatar
+                    profilePicture={msg.customer_profile_picture}
+                    name={msg.customer_name}
+                    phone={msg.customer_phone}
+                    size="sm"
+                    isDark={isDark}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className={cn("font-semibold text-sm truncate", adminTextPrimary(isDark))}>
+                        {msg.customer_name || msg.customer_phone || "مشتری"}
+                      </span>
+                      {!msg.admin_read && <StatusBadge label="جدید" variant="unread" isDark={isDark} />}
+                      {msg.admin_replied && <StatusBadge label="پاسخ داده" variant="replied" isDark={isDark} />}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Message Detail */}
-        <Card className={cn(isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-200")}>
-          <CardHeader className={cn("border-b", isDark ? "border-white/5" : "border-gray-200")}>
-            <CardTitle className={cn("text-lg", isDark ? "text-white" : "text-gray-900")}>
-              جزئیات پیام
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {selectedMessage ? (
-              <div className="space-y-4">
-                <div>
-                  <h3 className={cn("font-semibold mb-2", isDark ? "text-white" : "text-gray-900")}>
-                    {selectedMessage.subject || "بدون موضوع"}
-                  </h3>
-                  <div className={cn("p-3 rounded-lg", isDark ? "bg-neutral-800" : "bg-gray-50")}>
-                    <p className={cn("text-sm leading-6", isDark ? "text-gray-300" : "text-gray-700")}>
-                      {selectedMessage.message}
+                    <p className={cn("text-xs font-medium mb-0.5 truncate", adminTextSecondary(isDark))}>
+                      {msg.subject || "بدون موضوع"}
+                    </p>
+                    <p className={cn("text-xs line-clamp-2 leading-relaxed", adminTextMuted(isDark))}>
+                      {msg.message}
+                    </p>
+                    <p className={cn("text-[11px] mt-1.5", adminTextMuted(isDark))}>
+                      {timestampToJalaliString(msg.createdAt)}
                     </p>
                   </div>
-                </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-                <div className={cn("text-sm space-y-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                  <p>فرستنده: {selectedMessage.customer_name || selectedMessage.customer_phone || "مشتری"}</p>
-                  <p>تاریخ: {formatJalaliDate(timestampToJalali(selectedMessage.createdAt))}</p>
-                </div>
+        {/* Detail */}
+        <div className={cn("lg:col-span-3 rounded-2xl border", adminCard(isDark))}>
+          <div className={cn("px-4 py-3 border-b text-sm font-bold", adminDivider(isDark), adminTextPrimary(isDark))}>
+            جزئیات پیام
+          </div>
+          <div className="p-5">
+            {activeMessage ? (
+              <div className="space-y-5">
+                <CustomerInfoCard msg={activeMessage} isDark={isDark} />
 
-                {selectedMessage.admin_reply && (
-                  <div>
-                    <h4 className={cn("font-semibold mb-2", isDark ? "text-white" : "text-gray-900")}>
-                      پاسخ شما:
-                    </h4>
-                    <div className={cn("p-3 rounded-lg", isDark ? "bg-coffee-900/20" : "bg-coffee-50")}>
-                      <p className={cn("text-sm leading-6", isDark ? "text-gray-300" : "text-gray-700")}>
-                        {selectedMessage.admin_reply}
+                <div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!isEditing && (
+                        <h3 className={cn("font-bold text-sm", adminTextPrimary(isDark))}>
+                          {activeMessage.subject || "بدون موضوع"}
+                        </h3>
+                      )}
+                      <StatusBadge
+                        label={activeMessage.admin_read ? "خوانده شده" : "خوانده نشده"}
+                        variant={activeMessage.admin_read ? "read" : "unread"}
+                        isDark={isDark}
+                      />
+                    </div>
+                    {!isEditing && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => startEditing(activeMessage)}
+                        className={cn("h-8 gap-1.5 text-xs", isDark ? "border-white/10" : "border-admin-border")}
+                      >
+                        <Pencil size={14} />
+                        ویرایش
+                      </Button>
+                    )}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className={cn("text-xs font-medium mb-1.5 block", adminTextMuted(isDark))}>
+                          موضوع
+                        </label>
+                        <Input
+                          value={editSubject}
+                          onChange={e => setEditSubject(e.target.value)}
+                          placeholder="موضوع پیام"
+                          className={inputClass}
+                          dir="rtl"
+                        />
+                      </div>
+                      <div>
+                        <label className={cn("text-xs font-medium mb-1.5 block", adminTextMuted(isDark))}>
+                          متن پیام
+                        </label>
+                        <Textarea
+                          value={editMessage}
+                          onChange={e => setEditMessage(e.target.value)}
+                          rows={4}
+                          dir="rtl"
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className={cn("text-xs font-medium mb-1.5 block", adminTextMuted(isDark))}>
+                          پاسخ مدیر (اختیاری)
+                        </label>
+                        <Textarea
+                          value={editReply}
+                          onChange={e => setEditReply(e.target.value)}
+                          rows={3}
+                          dir="rtl"
+                          className={inputClass}
+                          placeholder="پاسخ به مشتری..."
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(activeMessage.id)}
+                          disabled={processing === activeMessage.id || !editMessage.trim()}
+                          className="bg-coffee-600 hover:bg-coffee-500 text-white gap-1.5 h-8 text-xs"
+                        >
+                          {processing === activeMessage.id ? (
+                            <Loader2 className="animate-spin w-3.5 h-3.5" />
+                          ) : (
+                            <Check size={14} />
+                          )}
+                          ذخیره
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={cancelEditing}
+                          disabled={processing === activeMessage.id}
+                          className={cn("gap-1.5 h-8 text-xs", isDark ? "border-white/10" : "border-admin-border")}
+                        >
+                          <X size={14} />
+                          انصراف
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        className={cn(
+                          "p-4 rounded-xl border text-sm leading-relaxed",
+                          adminMutedSurface(isDark),
+                          isDark ? "border-white/10" : "border-admin-border",
+                          adminTextSecondary(isDark)
+                        )}
+                      >
+                        {activeMessage.message}
+                      </div>
+                      <p className={cn("text-xs mt-2", adminTextMuted(isDark))}>
+                        {timestampToJalaliString(activeMessage.createdAt)}
                       </p>
+                    </>
+                  )}
+                </div>
+
+                {!isEditing && activeMessage.admin_reply && (
+                  <div>
+                    <h4 className={cn("text-sm font-bold mb-2 flex items-center gap-1.5", adminTextPrimary(isDark))}>
+                      <Reply size={14} className="text-emerald-500" />
+                      پاسخ شما
+                    </h4>
+                    <div
+                      className={cn(
+                        "p-4 rounded-xl border text-sm leading-relaxed",
+                        isDark
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-gray-300"
+                          : "bg-emerald-50 border-emerald-200 text-gray-700"
+                      )}
+                    >
+                      {activeMessage.admin_reply}
                     </div>
                   </div>
                 )}
 
-                {!selectedMessage.admin_replied && (
+                {!isEditing && !activeMessage.admin_replied && (
                   <div>
-                    <h4 className={cn("font-semibold mb-2", isDark ? "text-white" : "text-gray-900")}>
-                      پاسخ به مشتری:
+                    <h4 className={cn("text-sm font-bold mb-2", adminTextPrimary(isDark))}>
+                      پاسخ به مشتری
                     </h4>
                     <Textarea
                       value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="پاسخ خود را اینجا بنویسید..."
+                      onChange={e => setReplyText(e.target.value)}
+                      placeholder="پاسخ خود را بنویسید..."
                       rows={4}
-                      className={cn(
-                        isDark
-                          ? "bg-neutral-800 border-neutral-700 text-white placeholder-gray-500 focus:border-coffee-600"
-                          : "bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-coffee-600"
-                      )}
+                      dir="rtl"
+                      className={inputClass}
                     />
                     <Button
-                      onClick={() => handleReply(selectedMessage.id)}
-                      disabled={processing === selectedMessage.id || !replyText.trim()}
-                      className="mt-2 bg-coffee-600 hover:bg-coffee-500 text-white"
+                      onClick={() => handleReply(activeMessage.id)}
+                      disabled={processing === activeMessage.id || !replyText.trim()}
+                      className="mt-2 bg-coffee-600 hover:bg-coffee-500 text-white gap-2"
                     >
-                      {processing === selectedMessage.id ? (
-                        <>
-                          <Loader2 className="animate-spin mr-2" size={16} />
-                          در حال ثبت...
-                        </>
+                      {processing === activeMessage.id ? (
+                        <Loader2 className="animate-spin w-4 h-4" />
                       ) : (
-                        <>
-                          <Reply size={16} className="mr-2" />
-                          ثبت پاسخ
-                        </>
+                        <Reply size={16} />
                       )}
+                      ثبت پاسخ
                     </Button>
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-4 border-t border-white/5">
+                {!isEditing && (
+                <div className={cn("flex flex-wrap gap-2 pt-4 border-t", adminDivider(isDark))}>
                   <Button
                     size="sm"
-                    onClick={() => handleMarkAsRead(selectedMessage.id, !selectedMessage.admin_read)}
-                    disabled={processing === selectedMessage.id}
+                    variant="outline"
+                    onClick={() => handleMarkAsRead(activeMessage.id, !activeMessage.admin_read)}
+                    disabled={processing === activeMessage.id}
                     className={cn(
-                      selectedMessage.admin_read
-                        ? "bg-gray-600 hover:bg-gray-500 text-white"
-                        : "bg-blue-600 hover:bg-blue-500 text-white"
+                      "gap-1.5 text-xs h-8",
+                      isDark ? "border-white/10" : "border-admin-border"
                     )}
                   >
-                    <Check size={16} className="mr-1" />
-                    {selectedMessage.admin_read ? "خوانده نشده" : "خوانده شده"}
+                    <Check size={14} />
+                    {activeMessage.admin_read ? "علامت خوانده نشده" : "علامت خوانده شده"}
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => handleDelete(selectedMessage.id)}
-                    disabled={processing === selectedMessage.id}
                     variant="destructive"
+                    onClick={() => handleDelete(activeMessage.id)}
+                    disabled={processing === activeMessage.id}
+                    className="gap-1.5 text-xs h-8"
                   >
-                    <Trash2 size={16} className="mr-1" />
-                    حذف
+                    <Trash2 size={14} />
+                    حذف پیام
                   </Button>
                 </div>
+                )}
               </div>
             ) : (
-              <div className={cn("text-center py-12", isDark ? "text-gray-500" : "text-gray-600")}>
-                پیامی را انتخاب کنید
+              <div className={cn("text-center py-16 text-sm", adminTextMuted(isDark))}>
+                <MessageSquare size={32} className="mx-auto mb-3 opacity-30" />
+                پیامی را از لیست انتخاب کنید
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 export default CustomerMessagesManager;
-

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search } from "lucide-react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,14 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  adminCard,
+  adminInput,
+  adminSelectContent,
+  adminSelectItem,
+  adminSelectTrigger,
+  adminTextPrimary
+} from "@/lib/adminTheme";
 
 export interface OrderFilterState {
   source: "all" | "website" | "manual";
@@ -41,187 +49,150 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
     onChange({ ...value, ...patch });
   };
 
+  const inputClass = cn("w-full", adminInput(isDark));
+  const selectTriggerClass = cn("w-full", adminSelectTrigger(isDark));
+  const selectContentClass = adminSelectContent(isDark);
+
+  const cardClass = cn("p-4 rounded-2xl border", adminCard(isDark));
+
   return (
-    <div className="space-y-4">
-      {/* Advanced Search & Filters */}
-      <div
-        className={cn(
-          "p-4 rounded-2xl border",
-          isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-        )}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Search
-            size={18}
-            className={isDark ? "text-gray-400" : "text-gray-600"}
+    <div className={cardClass}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal
+            size={17}
+            className={isDark ? "text-coffee-400" : "text-coffee-600"}
           />
-          <h3
-            className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}
-          >
-            جستجوی پیشرفته
+          <h3 className={cn("font-bold text-sm", adminTextPrimary(isDark))}>
+            فیلتر و جستجو
           </h3>
         </div>
-        <div className="grid grid-cols-3 sm:grid-cols-1 gap-4">
-          <div>
-            <label
+        <Button
+          type="button"
+          onClick={onReset}
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "text-xs h-8",
+            isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+          )}
+        >
+          بازنشانی
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
+        <div className="lg:col-span-1">
+          <label
+            className={cn(
+              "block text-xs mb-1.5",
+              isDark ? "text-gray-400" : "text-gray-500"
+            )}
+          >
+            جستجو
+          </label>
+          <div className="relative">
+            <Search
+              size={14}
               className={cn(
-                "block text-sm mb-1",
-                isDark ? "text-gray-400" : "text-gray-600"
+                "absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none",
+                isDark ? "text-gray-500" : "text-gray-400"
               )}
-            >
-              جستجو (نام، تلفن، شماره سفارش)
-            </label>
+            />
             <Input
               type="text"
               value={value.search}
               onChange={e => handleChange({ search: e.target.value })}
-              placeholder="جستجو..."
-              className={cn(
-                "w-full",
-                isDark
-                  ? "bg-neutral-800 border-white/10 text-white placeholder-gray-500"
-                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-              )}
-            />
-          </div>
-          <div>
-            <label
-              className={cn(
-                "block text-sm mb-1",
-                isDark ? "text-gray-400" : "text-gray-600"
-              )}
-            >
-              حداقل مبلغ (تومان)
-            </label>
-            <Input
-              type="number"
-              value={value.minAmount}
-              onChange={e => handleChange({ minAmount: e.target.value })}
-              placeholder="0"
-              className={cn(
-                "w-full",
-                isDark
-                  ? "bg-neutral-800 border-white/10 text-white placeholder-gray-500"
-                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-              )}
-            />
-          </div>
-          <div>
-            <label
-              className={cn(
-                "block text-sm mb-1",
-                isDark ? "text-gray-400" : "text-gray-600"
-              )}
-            >
-              حداکثر مبلغ (تومان)
-            </label>
-            <Input
-              type="number"
-              value={value.maxAmount}
-              onChange={e => handleChange({ maxAmount: e.target.value })}
-              placeholder="بدون محدودیت"
-              className={cn(
-                "w-full",
-                isDark
-                  ? "bg-neutral-800 border-white/10 text-white placeholder-gray-500"
-                  : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-              )}
+              placeholder="نام، تلفن، شماره سفارش..."
+              className={cn(inputClass, "pr-9")}
             />
           </div>
         </div>
+        <div>
+          <label
+            className={cn(
+              "block text-xs mb-1.5",
+              isDark ? "text-gray-400" : "text-gray-500"
+            )}
+          >
+            حداقل مبلغ (تومان)
+          </label>
+          <Input
+            type="number"
+            value={value.minAmount}
+            onChange={e => handleChange({ minAmount: e.target.value })}
+            placeholder="0"
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label
+            className={cn(
+              "block text-xs mb-1.5",
+              isDark ? "text-gray-400" : "text-gray-500"
+            )}
+          >
+            حداکثر مبلغ (تومان)
+          </label>
+          <Input
+            type="number"
+            value={value.maxAmount}
+            onChange={e => handleChange({ maxAmount: e.target.value })}
+            placeholder="بدون محدودیت"
+            className={inputClass}
+          />
+        </div>
       </div>
 
-      {/* Basic Filters (source, status, dates, reset) */}
-      <div
-        className={cn(
-          "p-4 rounded-2xl border flex flex-row sm:flex-col gap-4 flex-wrap items-end",
-          isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-        )}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Select
+          dir="rtl"
           value={value.source || "all"}
           onValueChange={val =>
             handleChange({ source: val as OrderFilterState["source"] })
           }
         >
-          <SelectTrigger
-            className={cn(
-              "w-[180px]",
-              isDark
-                ? "bg-neutral-800 border-white/10 text-white"
-                : "bg-white border-gray-300 text-gray-900"
-            )}
-          >
-            <SelectValue placeholder="همه منابع" />
+          <SelectTrigger dir="rtl" className={selectTriggerClass}>
+            <SelectValue placeholder="منبع" />
           </SelectTrigger>
-          <SelectContent
-            className={cn(
-              isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900"
-            )}
-          >
-            <SelectItem value="all">همه منابع</SelectItem>
-            <SelectItem value="website">وب‌سایت</SelectItem>
-            <SelectItem value="manual">دستی</SelectItem>
+          <SelectContent dir="rtl" className={selectContentClass}>
+            <SelectItem value="all" className={adminSelectItem}>همه منابع</SelectItem>
+            <SelectItem value="website" className={adminSelectItem}>وب‌سایت</SelectItem>
+            <SelectItem value="manual" className={adminSelectItem}>دستی</SelectItem>
           </SelectContent>
         </Select>
 
         <Select
+          dir="rtl"
           value={value.status || "all"}
           onValueChange={val =>
             handleChange({ status: val as OrderFilterState["status"] })
           }
         >
-          <SelectTrigger
-            className={cn(
-              "w-[180px]",
-              isDark
-                ? "bg-neutral-800 border-white/10 text-white"
-                : "bg-white border-gray-300 text-gray-900"
-            )}
-          >
-            <SelectValue placeholder="همه وضعیت‌ها" />
+          <SelectTrigger dir="rtl" className={selectTriggerClass}>
+            <SelectValue placeholder="وضعیت" />
           </SelectTrigger>
-          <SelectContent
-            className={cn(
-              isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900"
-            )}
-          >
-            <SelectItem value="all">همه وضعیت‌ها</SelectItem>
-            <SelectItem value="pending">درحال انتظار</SelectItem>
-            <SelectItem value="completed">تکمیل شده</SelectItem>
-            <SelectItem value="cancelled">لغو شده</SelectItem>
+          <SelectContent dir="rtl" className={selectContentClass}>
+            <SelectItem value="all" className={adminSelectItem}>همه وضعیت‌ها</SelectItem>
+            <SelectItem value="pending" className={adminSelectItem}>در انتظار</SelectItem>
+            <SelectItem value="completed" className={adminSelectItem}>تکمیل شده</SelectItem>
+            <SelectItem value="cancelled" className={adminSelectItem}>لغو شده</SelectItem>
           </SelectContent>
         </Select>
 
-        <div className="flex-1 min-w-[200px]">
-          <ScrollingJalaliDatePicker
-            value={value.dateFrom}
-            onChange={v => handleChange({ dateFrom: v })}
-            placeholder="از تاریخ"
-            isDark={isDark}
-          />
-        </div>
+        <ScrollingJalaliDatePicker
+          value={value.dateFrom}
+          onChange={v => handleChange({ dateFrom: v })}
+          placeholder="از تاریخ"
+          isDark={isDark}
+        />
 
-        <div className="flex-1 min-w-[200px]">
-          <ScrollingJalaliDatePicker
-            value={value.dateTo}
-            onChange={v => handleChange({ dateTo: v })}
-            placeholder="تا تاریخ"
-            isDark={isDark}
-          />
-        </div>
-
-        <Button
-          onClick={onReset}
-          variant="outline"
-          className={cn(
-            isDark
-              ? "bg-neutral-800 border-white/10 text-white hover:bg-neutral-700"
-              : "bg-gray-200 border-gray-300 text-gray-900 hover:bg-gray-300"
-          )}
-        >
-          بازنشانی فیلترها
-        </Button>
+        <ScrollingJalaliDatePicker
+          value={value.dateTo}
+          onChange={v => handleChange({ dateTo: v })}
+          placeholder="تا تاریخ"
+          isDark={isDark}
+        />
       </div>
     </div>
   );

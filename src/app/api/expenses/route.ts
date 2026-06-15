@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
 import { v4 as uuidv4 } from "uuid";
 
 initializeDatabase();
 
+function parseExpenseDate(value: string | number): number {
+  if (typeof value === "number") return value;
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const year = parseInt(value.split("-")[0], 10);
+    if (year >= 1300 && year <= 1500) return jalaliToTimestamp(value);
+  }
+  return Math.floor(new Date(value).getTime() / 1000);
+}
+
 // GET all expenses (with optional filtering)
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only admins can view expenses
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const { searchParams } = new URL(request.url);
@@ -37,15 +38,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (dateFrom) {
-      const fromTimestamp = typeof dateFrom === "string" ? Math.floor(new Date(dateFrom).getTime() / 1000) : dateFrom;
       conditions.push("date >= ?");
-      params.push(fromTimestamp);
+      params.push(parseExpenseDate(dateFrom));
     }
 
     if (dateTo) {
-      const toTimestamp = typeof dateTo === "string" ? Math.floor(new Date(dateTo).getTime() / 1000) : dateTo;
       conditions.push("date <= ?");
-      params.push(toTimestamp);
+      params.push(parseExpenseDate(dateTo));
     }
 
     if (conditions.length > 0) {
@@ -85,18 +84,8 @@ export async function GET(request: NextRequest) {
 // POST create new expense
 export async function POST(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only admins can create expenses
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const {
@@ -132,7 +121,7 @@ export async function POST(request: NextRequest) {
     const expenseId = uuidv4();
 
     // Convert date to timestamp if provided as ISO string
-    const dateTimestamp = typeof date === "string" ? Math.floor(new Date(date).getTime() / 1000) : date;
+    const dateTimestamp = parseExpenseDate(date);
 
     db.prepare(`
       INSERT INTO expenses (id, category, amount, description, date, created_by, createdAt, updatedAt)
@@ -143,7 +132,7 @@ export async function POST(request: NextRequest) {
       amount,
       description || null,
       dateTimestamp,
-      user.id,
+      auth.userId,
       now,
       now
     );

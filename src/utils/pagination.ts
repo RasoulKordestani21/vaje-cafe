@@ -53,6 +53,29 @@ export function getPaginationInfo(
   };
 }
 
+/** Page numbers with ellipsis for smart pagination UI */
+export function getVisiblePageNumbers(
+  currentPage: number,
+  totalPages: number,
+  siblingCount = 2
+): Array<number | "ellipsis"> {
+  if (totalPages <= 1) return [1];
+  if (totalPages <= siblingCount * 2 + 3) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages: Array<number | "ellipsis"> = [1];
+  const left = Math.max(2, currentPage - siblingCount);
+  const right = Math.min(totalPages - 1, currentPage + siblingCount);
+
+  if (left > 2) pages.push("ellipsis");
+  for (let i = left; i <= right; i++) pages.push(i);
+  if (right < totalPages - 1) pages.push("ellipsis");
+  pages.push(totalPages);
+
+  return pages;
+}
+
 export function filterOrders<T extends Record<string, any>>(
   orders: T[],
   filters: FilterState

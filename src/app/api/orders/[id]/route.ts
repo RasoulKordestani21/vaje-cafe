@@ -174,44 +174,16 @@ export async function PATCH(
         
         if (pointsToAward > 0) {
           try {
-            // Check if points already awarded for this order
-            const existingPoints = db.prepare(`
-              SELECT id FROM loyalty_points WHERE order_id = ? AND transaction_type = 'earned'
-            `).get(id) as any;
-            
-            if (!existingPoints) {
-              const { randomUUID } = await import("crypto");
-              const transactionId = randomUUID();
-              
-              // Get current balance
-              const customer = db.prepare("SELECT loyalty_points_balance FROM customers WHERE id = ?").get(order.customerId) as any;
-              const currentBalance = customer?.loyalty_points_balance || 0;
-              const newBalance = currentBalance + pointsToAward;
-              
-              console.log(`[Loyalty Points] Customer ${order.customerId} - Current balance: ${currentBalance}, New balance: ${newBalance}`);
-              
-              // Create points transaction
-              db.prepare(`
-                INSERT INTO loyalty_points (id, customer_id, points, transaction_type, order_id, description, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-              `).run(
-                transactionId,
-                order.customerId,
-                pointsToAward,
-                'earned',
-                id,
-                `Points earned from order #${id.substring(0, 8)}`,
-                now
-              );
-              
-              // Update customer balance
-              db.prepare(`
-                UPDATE customers 
-                SET loyalty_points_balance = ?,
-                    updatedAt = ?
-                WHERE id = ?
-              `).run(newBalance, now, order.customerId);
-              
+            const { awardLoyaltyPoints } = await import("@/lib/loyaltyService");
+            const result = awardLoyaltyPoints(db, {
+              customerId: order.customerId,
+              points: pointsToAward,
+              sourceType: "order",
+              sourceId: id,
+              orderId: id,
+              description: `امتیاز از سفارش #${id.substring(0, 8)}`,
+            });
+            if (result.awarded) {
               console.log(`[Loyalty Points] Successfully awarded ${pointsToAward} points to customer ${order.customerId}`);
             } else {
               console.log(`[Loyalty Points] Points already awarded for order ${id}`);

@@ -8,6 +8,7 @@ import { ThemeContext } from "@/app/providers";
 import {
   Trash2,
   Plus,
+  Edit2,
   LayoutDashboard,
   Coffee,
   Users,
@@ -74,7 +75,17 @@ import WasteManager from "@/components/waste/WasteManager";
 import DashboardSidebar, {
   DashboardPage
 } from "@/components/dashboard/DashboardSidebar";
+import PaginationControls from "@/components/ui/PaginationControls";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { QuickAction } from "@/components/dashboard/DashboardHeader";
 import { cn } from "@/lib/utils";
+import { adminShellBg, adminContentBg, adminHeaderBg } from "@/lib/adminTheme";
 
 export default function AdminPage() {
   const {
@@ -155,6 +166,9 @@ export default function AdminPage() {
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPerPage] = useState(10);
   const [showManualOrderForm, setShowManualOrderForm] = useState(false);
+  const [showMenuForm, setShowMenuForm] = useState(false);
+  const [userDisplayName, setUserDisplayName] = useState("مدیر سیستم");
+  const [userRoleKey, setUserRoleKey] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<OrderFilterState>({
     source: "all",
     status: "all",
@@ -674,6 +688,65 @@ export default function AdminPage() {
     return [];
   };
 
+  // Load user display info for header
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const staffData = sessionStorage.getItem("staff_data");
+    if (staffData) {
+      try {
+        const parsed = JSON.parse(staffData);
+        if (parsed.name) setUserDisplayName(parsed.name);
+        if (parsed.role) setUserRoleKey(parsed.role);
+        return;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    fetch("/api/auth/validate", { credentials: "include" })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.user?.name) setUserDisplayName(data.user.name);
+        if (data?.role) setUserRoleKey(data.role);
+      })
+      .catch(() => {
+        const role = sessionStorage.getItem("vaje_role");
+        if (role) setUserRoleKey(role);
+      });
+  }, []);
+
+  const navigateToPage = (page: DashboardPage) => {
+    if (page === "dashboard") {
+      router.push("/dashboard");
+    } else {
+      router.push(`/dashboard?page=${page}`);
+    }
+  };
+
+  // Reset orders pagination when filters change
+  useEffect(() => {
+    if (activePage === "orders") {
+      setOrdersPage(1);
+    }
+  }, [orderFilter, activePage]);
+
+  const getHeaderQuickActions = (): QuickAction[] => {
+    switch (activePage) {
+      case "orders":
+        return [
+          {
+            label: "سفارش دستی",
+            icon: <Plus size={15} />,
+            onClick: () => setShowManualOrderForm(true),
+            variant: "primary"
+          }
+        ];
+      default:
+        return [];
+    }
+  };
+
   // Fetch staff accessible tabs and set default tab
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -759,19 +832,7 @@ export default function AdminPage() {
 
       case "orders":
         return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl text-white font-bold">مدیریت سفارشات</h2>
-              <button
-                onClick={() => setShowManualOrderForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
-              >
-                <Plus size={18} />
-                سفارش دستی
-              </button>
-            </div>
-
-            {/* Order Filters */}
+          <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <OrderFilters
               value={orderFilter}
               onChange={setOrderFilter}
@@ -898,7 +959,14 @@ export default function AdminPage() {
                 <div className="space-y-6">
                   {/* Select All Checkbox */}
                   {filtered.length > 0 && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-neutral-800/50">
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 p-3 rounded-xl border",
+                        isDark
+                          ? "bg-white/[0.03] border-white/[0.06]"
+                          : "bg-admin-surface border-admin-border shadow-sm"
+                      )}
+                    >
                       <button
                         onClick={() => {
                           if (allFilteredSelected) {
@@ -965,7 +1033,7 @@ export default function AdminPage() {
                     isDark={isDark}
                   />
 
-                  {/* Pagination Controls */}
+                  {/* Pagination */}
                   {(() => {
                     const info = getPaginationInfo(
                       filtered.length,
@@ -976,29 +1044,24 @@ export default function AdminPage() {
                     if (info.pages <= 1) return null;
 
                     return (
-                      <div className="flex justify-center items-center gap-3 p-4">
-                        <button
-                          onClick={() =>
-                            setOrdersPage(Math.max(1, ordersPage - 1))
-                          }
-                          disabled={!info.hasPrevPage}
-                          className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
+                      <div className="flex flex-col items-center gap-3 pt-2">
+                        <PaginationControls
+                          currentPage={ordersPage}
+                          totalPages={info.pages}
+                          onPageChange={setOrdersPage}
+                          isDark={isDark}
+                          siblingCount={2}
+                        />
+                        <p
+                          className={cn(
+                            "text-xs",
+                            isDark ? "text-gray-500" : "text-gray-400"
+                          )}
                         >
-                          قبلی
-                        </button>
-                        <span className="text-white text-sm font-medium px-4">
-                          صفحه {formatPersianNumber(info.page)} از{" "}
+                          {formatPersianNumber(info.total)} سفارش — صفحه{" "}
+                          {formatPersianNumber(info.page)} از{" "}
                           {formatPersianNumber(info.pages)}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setOrdersPage(Math.min(info.pages, ordersPage + 1))
-                          }
-                          disabled={!info.hasNextPage}
-                          className="px-4 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition-colors"
-                        >
-                          بعدی
-                        </button>
+                        </p>
                       </div>
                     );
                   })()}
@@ -1010,14 +1073,132 @@ export default function AdminPage() {
 
       case "menu":
         return (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-              {/* Form Section */}
-              <div className="lg:col-span-1">
+          <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={() => {
+                  menuItems.setEditingItem(null);
+                  setShowMenuForm(true);
+                }}
+                className="bg-coffee-600 hover:bg-coffee-500 text-white gap-2"
+              >
+                <Plus size={18} />
+                افزودن آیتم جدید
+              </Button>
+            </div>
+
+            <MenuTable
+              items={items}
+              onEdit={item => {
+                menuItems.handleEdit(item);
+                setShowMenuForm(true);
+              }}
+              onDelete={menuItems.handleDelete}
+              onManageIngredients={itemId => {
+                setIngredientModalItemId(itemId);
+                setShowIngredientModal(true);
+              }}
+              onTogglePin={async (itemId: string, isPinned: boolean) => {
+                try {
+                  await updateItem(itemId, { is_pinned: isPinned } as any);
+                } catch (err) {
+                  console.error("Failed to toggle pin:", err);
+                  alert("خطا در تغییر وضعیت ثابت کردن");
+                }
+              }}
+              onToggleSuggest={async (
+                itemId: string,
+                isSuggested: boolean
+              ) => {
+                try {
+                  await updateItem(itemId, {
+                    is_suggested: isSuggested
+                  } as any);
+                } catch (err) {
+                  console.error("Failed to toggle suggest:", err);
+                  alert("خطا در تغییر وضعیت پیشنهاد");
+                }
+              }}
+              onReorder={async (
+                itemOrders: Array<{ id: string; display_order: number }>
+              ) => {
+                try {
+                  const adminToken =
+                    process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
+                  const response = await fetch("/api/menu/reorder", {
+                    method: "PUT",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(adminToken
+                        ? { "x-access-token": adminToken }
+                        : {})
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({ itemOrders })
+                  });
+                  if (response.ok) {
+                    alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
+                  } else {
+                    throw new Error("Failed to reorder");
+                  }
+                } catch (err) {
+                  console.error("Failed to reorder items:", err);
+                  alert("خطا در تغییر ترتیب آیتم‌ها");
+                }
+              }}
+              isDark={isDark}
+            />
+
+            <Dialog
+              open={showMenuForm || !!menuItems.editingItem}
+              onOpenChange={open => {
+                if (!open) {
+                  menuItems.handleCancel();
+                  setShowMenuForm(false);
+                }
+              }}
+            >
+              <DialogContent
+                className={cn(
+                  "max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0",
+                  isDark
+                    ? "bg-[#1a1d24] border-white/10 text-white"
+                    : "bg-admin-surface border-admin-border"
+                )}
+              >
+                <DialogHeader
+                  className={cn(
+                    "px-6 pt-6 pb-4 border-b shrink-0 text-right space-y-0",
+                    isDark ? "border-white/10" : "border-admin-border"
+                  )}
+                >
+                  <DialogTitle className="flex items-center gap-2 text-base font-bold pe-8">
+                    {menuItems.editingItem ? (
+                      <>
+                        <Edit2 size={18} className="text-coffee-500 shrink-0" />
+                        ویرایش آیتم
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={18} className="text-coffee-500 shrink-0" />
+                        افزودن آیتم جدید
+                      </>
+                    )}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="overflow-y-auto px-6 py-5 flex-1">
                 <MenuItemForm
                   editingItem={menuItems.editingItem}
-                  onSubmit={menuItems.handleSubmit}
-                  onCancel={menuItems.handleCancel}
+                  onSubmit={async (...args) => {
+                    const wasEditing = !!menuItems.editingItem;
+                    await menuItems.handleSubmit(...args);
+                    if (wasEditing) setShowMenuForm(false);
+                  }}
+                  onCancel={() => {
+                    menuItems.handleCancel();
+                    setShowMenuForm(false);
+                  }}
                   onManageIngredients={() => {
                     if (menuItems.editingItem) {
                       setIngredientModalItemId(menuItems.editingItem.id);
@@ -1026,72 +1207,12 @@ export default function AdminPage() {
                   }}
                   isDark={isDark}
                   isSubmitting={menuItems.isSubmitting}
+                  compact
+                  hideTitle
                 />
-              </div>
-
-              {/* List Section */}
-              <div className="lg:col-span-2">
-                <MenuTable
-                  items={items}
-                  onEdit={menuItems.handleEdit}
-                  onDelete={menuItems.handleDelete}
-                  onManageIngredients={itemId => {
-                    setIngredientModalItemId(itemId);
-                    setShowIngredientModal(true);
-                  }}
-                  onTogglePin={async (itemId: string, isPinned: boolean) => {
-                    try {
-                      await updateItem(itemId, { is_pinned: isPinned } as any);
-                    } catch (err) {
-                      console.error("Failed to toggle pin:", err);
-                      alert("خطا در تغییر وضعیت ثابت کردن");
-                    }
-                  }}
-                  onToggleSuggest={async (
-                    itemId: string,
-                    isSuggested: boolean
-                  ) => {
-                    try {
-                      await updateItem(itemId, {
-                        is_suggested: isSuggested
-                      } as any);
-                    } catch (err) {
-                      console.error("Failed to toggle suggest:", err);
-                      alert("خطا در تغییر وضعیت پیشنهاد");
-                    }
-                  }}
-                  onReorder={async (
-                    itemOrders: Array<{ id: string; display_order: number }>
-                  ) => {
-                    try {
-                      const adminToken =
-                        process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
-                      const response = await fetch("/api/menu/reorder", {
-                        method: "PUT",
-                        headers: {
-                          "Content-Type": "application/json",
-                          ...(adminToken
-                            ? { "x-access-token": adminToken }
-                            : {})
-                        },
-                        credentials: "include",
-                        body: JSON.stringify({ itemOrders })
-                      });
-                      if (response.ok) {
-                        // MenuContext will automatically refresh via subscribeToMenu
-                        alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
-                      } else {
-                        throw new Error("Failed to reorder");
-                      }
-                    } catch (err) {
-                      console.error("Failed to reorder items:", err);
-                      alert("خطا در تغییر ترتیب آیتم‌ها");
-                    }
-                  }}
-                  isDark={isDark}
-                />
-              </div>
-            </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         );
 
@@ -1502,7 +1623,7 @@ export default function AdminPage() {
 
   return (
     <div
-      className={cn("flex h-screen overflow-hidden", isDark ? "bg-[#0d0f13]" : "bg-gray-50")}
+      className={cn("flex h-screen overflow-hidden", adminShellBg(isDark))}
       dir="rtl"
     >
       {/* Sidebar — fixed overlay on mobile, inline on desktop */}
@@ -1522,27 +1643,32 @@ export default function AdminPage() {
         {/* Header */}
         <div
           className={cn(
-            "h-16 flex items-center border-b shrink-0",
-            isDark
-              ? "bg-[#111318] border-white/5"
-              : "bg-white border-gray-100"
+            "relative z-30 min-h-16 flex items-center border-b shrink-0 px-3 md:px-4 lg:px-5 py-2",
+            adminHeaderBg(isDark)
           )}
         >
-          <div className="flex-1 px-5">
-            <DashboardHeader
-              isDark={isDark}
-              onLogout={handleLogout}
-              onToggleTheme={toggleTheme}
-            />
-          </div>
+          <DashboardHeader
+            isDark={isDark}
+            activePage={activePage}
+            onLogout={handleLogout}
+            onToggleTheme={toggleTheme}
+            pendingOrdersCount={pendingOrdersCount}
+            userName={userDisplayName}
+            userRole={userRoleKey || userRole}
+            onNavigate={navigateToPage}
+            onGlobalSearch={query => {
+              navigateToPage("orders");
+              setOrderFilter(prev => ({ ...prev, search: query }));
+              setOrdersPage(1);
+            }}
+            quickActions={getHeaderQuickActions()}
+            onMenuToggle={() => setSidebarMobileOpen(true)}
+          />
         </div>
 
         {/* Page Content */}
         <div
-          className={cn(
-            "flex-1 overflow-y-auto",
-            isDark ? "bg-[#0d0f13]" : "bg-gray-50"
-          )}
+          className={cn("flex-1 overflow-y-auto", adminContentBg(isDark))}
         >
           <div className="max-w-7xl mx-auto px-5 py-6">
             {renderPageContent()}
@@ -1551,11 +1677,11 @@ export default function AdminPage() {
       </div>
 
       {/* Manual Order Form Modal */}
-      {showManualOrderForm && (
-        <ManualOrderForm
-          items={items}
-          isDark={isDark}
-          onSubmit={async orderData => {
+      <ManualOrderForm
+        items={items}
+        isDark={isDark}
+        open={showManualOrderForm}
+        onSubmit={async orderData => {
             try {
               const response = await fetch("/api/orders", {
                 method: "POST",
@@ -1599,7 +1725,6 @@ export default function AdminPage() {
           }}
           onClose={() => setShowManualOrderForm(false)}
         />
-      )}
 
       {/* Product Modal - for both add and edit */}
       {(showNewProductForm || selectedProduct) && (

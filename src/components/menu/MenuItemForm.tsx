@@ -1,14 +1,27 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Edit2, Upload } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Upload,
+  ImageIcon,
+  Pin,
+  Star,
+  CheckCircle2
+} from "lucide-react";
 import { MenuItem, CATEGORIES } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface MenuItemFormProps {
@@ -18,6 +31,8 @@ interface MenuItemFormProps {
   onManageIngredients?: () => void;
   isDark: boolean;
   isSubmitting?: boolean;
+  compact?: boolean;
+  hideTitle?: boolean;
 }
 
 const MenuItemForm: React.FC<MenuItemFormProps> = ({
@@ -26,7 +41,9 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
   onCancel,
   onManageIngredients,
   isDark,
-  isSubmitting = false
+  isSubmitting = false,
+  compact = false,
+  hideTitle = false
 }) => {
   const [formData, setFormData] = useState<Omit<MenuItem, "id">>({
     name: "",
@@ -39,6 +56,7 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
     is_suggested: false
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (editingItem) {
@@ -52,6 +70,7 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
         is_pinned: editingItem.is_pinned || false,
         is_suggested: editingItem.is_suggested || false
       });
+      setImagePreview(editingItem.imageUrl || null);
     } else {
       setFormData({
         name: "",
@@ -59,15 +78,20 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
         price: 0,
         category: "اسپرسو",
         available: true,
-        imageUrl: ""
+        imageUrl: "",
+        is_pinned: false,
+        is_suggested: false
       });
       setImageFile(null);
+      setImagePreview(null);
     }
   }, [editingItem]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0]);
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
@@ -75,88 +99,96 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
     e.preventDefault();
     await onSubmit(formData, imageFile || undefined);
     if (!editingItem) {
-      // Reset form after adding new item
       setFormData({
         name: "",
         description: "",
         price: 0,
         category: "اسپرسو",
         available: true,
-        imageUrl: ""
+        imageUrl: "",
+        is_pinned: false,
+        is_suggested: false
       });
       setImageFile(null);
+      setImagePreview(null);
     }
   };
 
+  const inputClass = cn(
+    isDark
+      ? "bg-neutral-900/80 border-white/10 text-white placeholder:text-gray-500"
+      : "bg-white border-gray-200 text-gray-900"
+  );
+
+  const toggleClass = (active: boolean, color: string) =>
+    cn(
+      "flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all text-sm",
+      active
+        ? isDark
+          ? `${color} border-current/30 bg-current/10`
+          : `${color} border-current/20 bg-current/5`
+        : isDark
+          ? "border-white/10 text-gray-400 hover:border-white/20"
+          : "border-gray-200 text-gray-500 hover:border-gray-300"
+    );
+
   return (
-    <Card
-      className={cn(
-        "sticky top-28 shadow-lg",
-        isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-      )}
-    >
-      <CardHeader>
-        <CardTitle className={cn("flex items-center gap-2", isDark ? "text-white" : "text-gray-900")}>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Header row in compact/modal mode */}
+      {compact && !hideTitle && (
+        <div className="flex items-center gap-2 pb-1">
           {editingItem ? (
             <>
-              <Edit2 size={20} className="text-coffee-500" />
-              ویرایش آیتم
+              <Edit2 size={18} className="text-coffee-500" />
+              <span className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}>
+                ویرایش آیتم
+              </span>
             </>
           ) : (
             <>
-              <Plus size={20} className="text-coffee-500" />
-              افزودن آیتم جدید
+              <Plus size={18} className="text-coffee-500" />
+              <span className={cn("font-bold", isDark ? "text-white" : "text-gray-900")}>
+                افزودن آیتم جدید
+              </span>
             </>
           )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left column: basic info */}
+        <div className="space-y-4">
           <div>
-            <Label className={cn("text-xs font-medium mb-1", isDark ? "text-gray-400" : "text-gray-600")}>
-              نام آیتم
-            </Label>
+            <Label className="text-xs mb-1.5 block">نام آیتم *</Label>
             <Input
               required
-              type="text"
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
-              className={cn(
-                "w-full",
-                isDark
-                  ? "bg-neutral-950 border-neutral-800 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              )}
+              placeholder="مثلاً: کاپوچینو"
+              className={inputClass}
             />
           </div>
-
           <div>
-            <Label className={cn("text-xs font-medium mb-1", isDark ? "text-gray-400" : "text-gray-600")}>
-              توضیحات
-            </Label>
+            <Label className="text-xs mb-1.5 block">توضیحات *</Label>
             <Textarea
               required
               rows={3}
               value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              className={cn(
-                "w-full",
-                isDark
-                  ? "bg-neutral-950 border-neutral-800 text-white"
-                  : "bg-white border-gray-300 text-gray-900"
-              )}
+              onChange={e =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              placeholder="توضیح کوتاه درباره آیتم..."
+              className={inputClass}
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className={cn("text-xs font-medium mb-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                قیمت (تومان)
-              </Label>
+              <Label className="text-xs mb-1.5 block">قیمت (تومان) *</Label>
               <Input
                 required
                 type="number"
                 step="1000"
+                min="0"
                 value={formData.price}
                 onChange={e =>
                   setFormData({
@@ -164,32 +196,23 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
                     price: parseFloat(e.target.value) || 0
                   })
                 }
-                className={cn(
-                  "w-full",
-                  isDark
-                    ? "bg-neutral-950 border-neutral-800 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                )}
+                className={inputClass}
               />
             </div>
             <div>
-              <Label className={cn("text-xs font-medium mb-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                دسته‌بندی
-              </Label>
+              <Label className="text-xs mb-1.5 block">دسته‌بندی</Label>
               <Select
                 value={formData.category}
-                onValueChange={value => setFormData({ ...formData, category: value })}
+                onValueChange={value =>
+                  setFormData({ ...formData, category: value })
+                }
               >
-                <SelectTrigger
-                  className={cn(
-                    isDark
-                      ? "bg-neutral-950 border-neutral-800 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  )}
-                >
+                <SelectTrigger className={inputClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className={cn(isDark ? "bg-neutral-900 text-white" : "bg-white text-gray-900")}>
+                <SelectContent
+                  className={cn(isDark ? "bg-neutral-900 text-white" : "bg-white")}
+                >
                   {CATEGORIES.map(cat => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
@@ -199,166 +222,151 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
               </Select>
             </div>
           </div>
+        </div>
 
+        {/* Right column: image + toggles */}
+        <div className="space-y-4">
           <div>
-            <Label className={cn("text-xs font-medium mb-1", isDark ? "text-gray-400" : "text-gray-600")}>
-              تصویر
-            </Label>
-            <div className="space-y-2">
-              <Input
-                type="text"
-                value={formData.imageUrl || ""}
-                onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
-                placeholder="لینک تصویر (اختیاری)"
-                className={cn(
-                  "w-full dir-ltr text-right",
-                  isDark
-                    ? "bg-neutral-950 border-neutral-800 text-white"
-                    : "bg-white border-gray-300 text-gray-900"
-                )}
-              />
-              <div className={cn("text-center text-xs", isDark ? "text-gray-500" : "text-gray-600")}>
-                یا آپلود فایل
-              </div>
-              <div
-                className={cn(
-                  "relative border border-dashed rounded-lg p-4 text-center hover:border-coffee-500 transition-colors",
-                  isDark
-                    ? "border-gray-600 bg-neutral-950"
-                    : "border-gray-400 bg-white"
-                )}
-              >
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                <div className="flex flex-col items-center gap-2">
-                  <Upload size={20} className={isDark ? "text-gray-400" : "text-gray-600"} />
-                  <span className={cn("text-xs", isDark ? "text-gray-400" : "text-gray-600")}>
+            <Label className="text-xs mb-1.5 block">تصویر</Label>
+            <div
+              className={cn(
+                "relative rounded-xl border-2 border-dashed overflow-hidden transition-colors",
+                isDark
+                  ? "border-white/15 hover:border-coffee-500/50 bg-neutral-900/50"
+                  : "border-gray-200 hover:border-coffee-400 bg-gray-50"
+              )}
+            >
+              {imagePreview ? (
+                <div className="relative aspect-video">
+                  <img
+                    src={imagePreview}
+                    alt="پیش‌نمایش"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Upload size={24} className="text-white" />
+                  </div>
+                </div>
+              ) : (
+                <div className="aspect-video flex flex-col items-center justify-center gap-2 py-6">
+                  <ImageIcon
+                    size={28}
+                    className={isDark ? "text-gray-600" : "text-gray-300"}
+                  />
+                  <span
+                    className={cn(
+                      "text-xs",
+                      isDark ? "text-gray-500" : "text-gray-400"
+                    )}
+                  >
                     {imageFile ? imageFile.name : "انتخاب تصویر از دستگاه"}
                   </span>
                 </div>
-              </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
             </div>
+            <Input
+              type="text"
+              value={formData.imageUrl || ""}
+              onChange={e => {
+                setFormData({ ...formData, imageUrl: e.target.value });
+                if (e.target.value) setImagePreview(e.target.value);
+              }}
+              placeholder="یا لینک تصویر (اختیاری)"
+              className={cn(inputClass, "mt-2 dir-ltr text-right text-xs")}
+            />
           </div>
 
-          <div className="space-y-3">
-            <div
-              className={cn(
-                "flex items-center gap-3 p-3 rounded border",
-                isDark
-                  ? "bg-neutral-950 border-neutral-800"
-                  : "bg-white border-gray-300"
-              )}
-            >
+          <div className="space-y-2">
+            <label className={toggleClass(formData.available, "text-emerald-400")}>
               <input
                 type="checkbox"
-                id="available"
                 checked={formData.available}
-                onChange={e => setFormData({ ...formData, available: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-600 text-coffee-600 focus:ring-coffee-500 bg-neutral-900"
+                onChange={e =>
+                  setFormData({ ...formData, available: e.target.checked })
+                }
+                className="sr-only"
               />
-              <Label
-                htmlFor="available"
-                className={cn("text-sm cursor-pointer", isDark ? "text-gray-300" : "text-gray-700")}
-              >
-                موجود برای سفارش
-              </Label>
-            </div>
-
-            <div
-              className={cn(
-                "flex items-center gap-3 p-3 rounded border",
-                isDark
-                  ? "bg-neutral-950 border-neutral-800"
-                  : "bg-white border-gray-300"
-              )}
-            >
+              <CheckCircle2 size={16} />
+              موجود برای سفارش
+            </label>
+            <label className={toggleClass(!!formData.is_pinned, "text-yellow-400")}>
               <input
                 type="checkbox"
-                id="is_pinned"
                 checked={formData.is_pinned || false}
-                onChange={e => setFormData({ ...formData, is_pinned: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-600 text-yellow-600 focus:ring-yellow-500 bg-neutral-900"
+                onChange={e =>
+                  setFormData({ ...formData, is_pinned: e.target.checked })
+                }
+                className="sr-only"
               />
-              <Label
-                htmlFor="is_pinned"
-                className={cn("text-sm cursor-pointer", isDark ? "text-gray-300" : "text-gray-700")}
-              >
-                📌 در بالای منو نمایش داده شود
-              </Label>
-            </div>
-
-            <div
-              className={cn(
-                "flex items-center gap-3 p-3 rounded border",
-                isDark
-                  ? "bg-neutral-950 border-neutral-800"
-                  : "bg-white border-gray-300"
-              )}
-            >
+              <Pin size={16} />
+              نمایش در بالای منو
+            </label>
+            <label className={toggleClass(!!formData.is_suggested, "text-blue-400")}>
               <input
                 type="checkbox"
-                id="is_suggested"
                 checked={formData.is_suggested || false}
-                onChange={e => setFormData({ ...formData, is_suggested: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-neutral-900"
+                onChange={e =>
+                  setFormData({ ...formData, is_suggested: e.target.checked })
+                }
+                className="sr-only"
               />
-              <Label
-                htmlFor="is_suggested"
-                className={cn("text-sm cursor-pointer", isDark ? "text-gray-300" : "text-gray-700")}
-              >
-                ⭐ به عنوان پیشنهاد امروز نمایش داده شود
-              </Label>
-            </div>
+              <Star size={16} />
+              پیشنهاد امروز
+            </label>
           </div>
+        </div>
+      </div>
 
-          {editingItem && onManageIngredients && (
-            <Button
-              type="button"
-              onClick={onManageIngredients}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
-            >
-              <Plus size={18} className="ml-2" />
-              مدیریت مواد اولیه
-            </Button>
+      {editingItem && onManageIngredients && (
+        <Button
+          type="button"
+          onClick={onManageIngredients}
+          variant="outline"
+          className={cn(
+            "w-full",
+            isDark ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : ""
           )}
+        >
+          <Plus size={16} className="ml-2" />
+          مدیریت مواد اولیه
+        </Button>
+      )}
 
-          <div className="pt-4 flex gap-2">
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex-1 bg-coffee-600 hover:bg-coffee-500 text-white"
-            >
-              {isSubmitting
-                ? "در حال ذخیره..."
-                : editingItem
-                ? "بروزرسانی"
-                : "افزودن به منو"}
-            </Button>
-            {editingItem && onCancel && (
-              <Button
-                type="button"
-                onClick={onCancel}
-                variant="outline"
-                className={cn(
-                  isDark
-                    ? "bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700"
-                    : "bg-gray-100 border-gray-300 text-gray-900 hover:bg-gray-200"
-                )}
-              >
-                انصراف
-              </Button>
+      <div className="flex gap-2 pt-1">
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex-1 bg-coffee-600 hover:bg-coffee-500 text-white"
+        >
+          {isSubmitting
+            ? "در حال ذخیره..."
+            : editingItem
+              ? "بروزرسانی"
+              : "افزودن به منو"}
+        </Button>
+        {editingItem && onCancel && (
+          <Button
+            type="button"
+            onClick={onCancel}
+            variant="outline"
+            className={cn(
+              isDark
+                ? "border-white/10 text-gray-300 hover:bg-white/5"
+                : "border-gray-200"
             )}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+          >
+            انصراف
+          </Button>
+        )}
+      </div>
+    </form>
   );
 };
 
 export default MenuItemForm;
-
-

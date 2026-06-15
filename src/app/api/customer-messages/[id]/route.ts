@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 
 // PUT update message (mark as read, add reply)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
     const body = await request.json();
-    const { admin_read, admin_replied, admin_reply } = body;
+    const { admin_read, admin_replied, admin_reply, subject, message } = body;
 
     const existing = db.prepare("SELECT * FROM customer_messages WHERE id = ?").get(id);
     if (!existing) {
@@ -41,6 +41,19 @@ export async function PUT(
     if (admin_reply !== undefined) {
       updateFields.push("admin_reply = ?");
       updateValues.push(admin_reply);
+    }
+
+    if (subject !== undefined) {
+      updateFields.push("subject = ?");
+      updateValues.push(subject || null);
+    }
+
+    if (message !== undefined) {
+      if (!message || !String(message).trim()) {
+        return NextResponse.json({ error: "متن پیام نمی‌تواند خالی باشد" }, { status: 400 });
+      }
+      updateFields.push("message = ?");
+      updateValues.push(String(message).trim());
     }
 
     if (updateFields.length === 0) {
@@ -86,8 +99,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();

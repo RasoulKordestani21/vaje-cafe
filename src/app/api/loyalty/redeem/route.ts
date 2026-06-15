@@ -53,13 +53,15 @@ export async function POST(request: NextRequest) {
 
     // Create redemption transaction
     db.prepare(`
-      INSERT INTO loyalty_points (id, customer_id, points, transaction_type, reward_id, description, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO loyalty_points (id, customer_id, points, transaction_type, reward_id, source_type, source_id, description, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       transactionId,
       auth.customer.id,
       pointsToDeduct,
       "redeemed",
+      reward_id,
+      "reward",
       reward_id,
       `Redeemed reward: ${reward.name}`,
       now

@@ -1,45 +1,183 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Check, X, Star, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Check, X, Star, Loader2, MessageSquare, Clock, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatToman } from "@/utils/format";
-import { timestampToJalali, formatJalaliDate } from "@/utils/jalaliDateUtils";
-
-// Get admin token for API requests
-const getAuthHeaders = (): HeadersInit => {
-  const token = process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
-  if (token) {
-    return {
-      "x-access-token": token,
-    };
-  }
-  return {};
-};
+import { formatPersianNumber } from "@/utils/dateFormatter";
+import { timestampToJalaliString } from "@/utils/dateFormatter";
+import { getAuthHeaders } from "@/services/dbService";
+import CustomerAvatar from "@/components/customers/CustomerAvatar";
+import {
+  adminCard,
+  adminInput,
+  adminMutedSurface,
+  adminTextMuted,
+  adminTextPrimary,
+  adminTextSecondary
+} from "@/lib/adminTheme";
 
 interface Rating {
   id: string;
   menu_item_id: string;
+  menu_item_name?: string;
   customer_id: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_profile_picture?: string | null;
   rating: number;
   review_text?: string;
   admin_approved: boolean;
   createdAt: number;
-  menu_item_name?: string;
 }
 
 interface RatingsApprovalProps {
   isDark: boolean;
 }
 
+function StarRating({ value, size = 14 }: { value: number; size?: number }) {
+  return (
+    <div className="flex items-center gap-0.5" dir="ltr">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          size={size}
+          className={
+            i < value
+              ? "text-yellow-500 fill-yellow-500"
+              : "text-gray-300 dark:text-gray-600"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReviewCard({
+  rating,
+  isDark,
+  approving,
+  variant,
+  onApprove,
+  onDelete,
+  onUnapprove
+}: {
+  rating: Rating;
+  isDark: boolean;
+  approving: string | null;
+  variant: "pending" | "approved";
+  onApprove?: () => void;
+  onDelete?: () => void;
+  onUnapprove?: () => void;
+}) {
+  const busy = approving === rating.id;
+  const customerLabel = rating.customer_name || rating.customer_phone || "مشتری";
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-3 p-4 rounded-xl border transition-colors",
+        adminMutedSurface(isDark),
+        isDark ? "border-white/10 hover:border-white/15" : "border-admin-border hover:border-admin-border-strong"
+      )}
+    >
+      <CustomerAvatar
+        profilePicture={rating.customer_profile_picture}
+        name={rating.customer_name}
+        phone={rating.customer_phone}
+        size="md"
+        isDark={isDark}
+      />
+
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className={cn("font-semibold text-sm", adminTextPrimary(isDark))}>
+            {customerLabel}
+          </span>
+          <StarRating value={rating.rating} />
+          {rating.menu_item_name && (
+            <span
+              className={cn(
+                "text-[11px] px-2 py-0.5 rounded-full border",
+                isDark
+                  ? "border-coffee-500/30 text-coffee-400 bg-coffee-500/10"
+                  : "border-coffee-200 text-coffee-700 bg-coffee-50"
+              )}
+            >
+              {rating.menu_item_name}
+            </span>
+          )}
+        </div>
+
+        <p className={cn("text-xs", adminTextMuted(isDark))}>
+          {timestampToJalaliString(rating.createdAt)}
+        </p>
+
+        {rating.review_text ? (
+          <p className={cn("text-sm leading-relaxed pt-0.5", adminTextSecondary(isDark))}>
+            {rating.review_text}
+          </p>
+        ) : (
+          <p className={cn("text-xs italic", adminTextMuted(isDark))}>بدون متن نظر</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 shrink-0">
+        {variant === "pending" ? (
+          <>
+            <Button
+              size="sm"
+              onClick={onApprove}
+              disabled={busy}
+              className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-w-[88px]"
+            >
+              {busy ? <Loader2 className="animate-spin w-3.5 h-3.5" /> : <Check size={14} />}
+              تایید
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onDelete}
+              disabled={busy}
+              className={cn(
+                "h-8 gap-1.5 text-xs min-w-[88px]",
+                isDark
+                  ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+                  : "border-red-200 text-red-600 hover:bg-red-50"
+              )}
+            >
+              <X size={14} />
+              رد
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onUnapprove}
+            disabled={busy}
+            className={cn(
+              "h-8 gap-1.5 text-xs min-w-[88px]",
+              isDark
+                ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
+                : "border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+            )}
+          >
+            {busy ? <Loader2 className="animate-spin w-3.5 h-3.5" /> : null}
+            لغو تایید
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchRatings();
@@ -48,7 +186,10 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
   const fetchRatings = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/ratings?approved_only=false");
+      const response = await fetch("/api/ratings?approved_only=false", {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
       if (response.ok) {
         const data = await response.json();
         setRatings(data.ratings || []);
@@ -65,23 +206,13 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
       setApproving(ratingId);
       const response = await fetch(`/api/ratings/${ratingId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         credentials: "include",
-        body: JSON.stringify({ admin_approved: approved }),
+        body: JSON.stringify({ admin_approved: approved })
       });
-
-      if (response.ok) {
-        await fetchRatings();
-        alert(approved ? "نظر تایید شد" : "نظر رد شد");
-      } else {
-        alert("خطا در تغییر وضعیت نظر");
-      }
+      if (response.ok) await fetchRatings();
     } catch (error) {
       console.error("Failed to update rating:", error);
-      alert("خطا در تغییر وضعیت نظر");
     } finally {
       setApproving(null);
     }
@@ -89,33 +220,42 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
 
   const handleDelete = async (ratingId: string) => {
     if (!confirm("آیا از حذف این نظر اطمینان دارید؟")) return;
-
     try {
       setApproving(ratingId);
       const response = await fetch(`/api/ratings/${ratingId}`, {
         method: "DELETE",
-        headers: {
-          ...getAuthHeaders(),
-        },
-        credentials: "include",
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
-
-      if (response.ok) {
-        await fetchRatings();
-        alert("نظر حذف شد");
-      } else {
-        alert("خطا در حذف نظر");
-      }
+      if (response.ok) await fetchRatings();
     } catch (error) {
       console.error("Failed to delete rating:", error);
-      alert("خطا در حذف نظر");
     } finally {
       setApproving(null);
     }
   };
 
-  const pendingRatings = ratings.filter((r) => !r.admin_approved);
-  const approvedRatings = ratings.filter((r) => r.admin_approved);
+  const filterRating = (r: Rating) => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return (
+      (r.customer_name?.toLowerCase().includes(q) ?? false) ||
+      (r.customer_phone?.includes(q) ?? false) ||
+      (r.menu_item_name?.toLowerCase().includes(q) ?? false) ||
+      (r.review_text?.toLowerCase().includes(q) ?? false)
+    );
+  };
+
+  const pendingRatings = useMemo(
+    () => ratings.filter(r => !r.admin_approved).filter(filterRating),
+    [ratings, search]
+  );
+  const approvedRatings = useMemo(
+    () => ratings.filter(r => r.admin_approved).filter(filterRating),
+    [ratings, search]
+  );
+
+  const inputClass = cn("w-full max-w-sm", adminInput(isDark));
 
   if (loading) {
     return (
@@ -126,183 +266,116 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Pending Ratings */}
-      <Card
-        className={cn(
-          isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-        )}
-      >
-        <CardHeader>
-          <CardTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
-            نظرات در انتظار تایید ({pendingRatings.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {pendingRatings.length === 0 ? (
-            <p className={cn("text-center py-8", isDark ? "text-gray-500" : "text-gray-400")}>
-              نظری در انتظار تایید نیست
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
+      {/* Summary + search */}
+      <div className={cn("p-4 rounded-2xl border", adminCard(isDark))}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div>
+            <h2 className={cn("text-base font-bold flex items-center gap-2", adminTextPrimary(isDark))}>
+              <MessageSquare size={18} className="text-coffee-500" />
+              نظرات و امتیازها
+            </h2>
+            <p className={cn("text-sm mt-1", adminTextMuted(isDark))}>
+              بررسی و تایید نظرات مشتریان
             </p>
-          ) : (
-            pendingRatings.map((rating) => (
-              <div
-                key={rating.id}
-                className={cn(
-                  "p-4 rounded-lg border",
-                  isDark
-                    ? "bg-neutral-800 border-white/10"
-                    : "bg-gray-50 border-gray-200"
-                )}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            size={16}
-                            className={
-                              i < rating.rating
-                                ? "text-yellow-400 fill-yellow-400"
-                                : isDark
-                                ? "text-gray-600"
-                                : "text-gray-300"
-                            }
-                          />
-                        ))}
-                      </div>
-                      <span className={cn("text-sm font-medium", isDark ? "text-gray-300" : "text-gray-700")}>
-                        {rating.customer_name || rating.customer_phone || "مشتری"}
-                      </span>
-                    </div>
-                    <p className={cn("text-xs", isDark ? "text-gray-500" : "text-gray-500")}>
-                      {formatJalaliDate(timestampToJalali(rating.createdAt))}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleApprove(rating.id, true)}
-                      disabled={approving === rating.id}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white"
-                    >
-                      {approving === rating.id ? (
-                        <Loader2 className="animate-spin w-4 h-4" />
-                      ) : (
-                        <Check size={16} />
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDelete(rating.id)}
-                      disabled={approving === rating.id}
-                      className={cn(
-                        isDark
-                          ? "border-red-600 text-red-400 hover:bg-red-900/20"
-                          : "border-red-300 text-red-600 hover:bg-red-50"
-                      )}
-                    >
-                      <X size={16} />
-                    </Button>
-                  </div>
-                </div>
-                {rating.review_text && (
-                  <p className={cn("text-sm mt-2", isDark ? "text-gray-400" : "text-gray-600")}>
-                    {rating.review_text}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="جستجو نام، محصول، متن..."
+            className={inputClass}
+            dir="rtl"
+          />
+        </div>
 
-      {/* Approved Ratings */}
-      <Card
-        className={cn(
-          isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-        )}
-      >
-        <CardHeader>
-          <CardTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
-            نظرات تایید شده ({approvedRatings.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {approvedRatings.length === 0 ? (
-            <p className={cn("text-center py-8", isDark ? "text-gray-500" : "text-gray-400")}>
-              هنوز نظری تایید نشده است
-            </p>
-          ) : (
-            approvedRatings.map((rating) => (
-              <div
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className={cn("p-3 rounded-xl border", adminMutedSurface(isDark), isDark ? "border-white/10" : "border-admin-border")}>
+            <div className={cn("text-xs mb-1 flex items-center gap-1", adminTextMuted(isDark))}>
+              <Clock size={13} />
+              در انتظار
+            </div>
+            <div className={cn("text-xl font-bold", isDark ? "text-yellow-400" : "text-yellow-600")}>
+              {formatPersianNumber(pendingRatings.length)}
+            </div>
+          </div>
+          <div className={cn("p-3 rounded-xl border", adminMutedSurface(isDark), isDark ? "border-white/10" : "border-admin-border")}>
+            <div className={cn("text-xs mb-1 flex items-center gap-1", adminTextMuted(isDark))}>
+              <ShieldCheck size={13} />
+              تایید شده
+            </div>
+            <div className={cn("text-xl font-bold", isDark ? "text-emerald-400" : "text-emerald-600")}>
+              {formatPersianNumber(approvedRatings.length)}
+            </div>
+          </div>
+          <div className={cn("p-3 rounded-xl border col-span-2 sm:col-span-1", adminMutedSurface(isDark), isDark ? "border-white/10" : "border-admin-border")}>
+            <div className={cn("text-xs mb-1", adminTextMuted(isDark))}>کل نظرات</div>
+            <div className={cn("text-xl font-bold", adminTextPrimary(isDark))}>
+              {formatPersianNumber(ratings.length)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Pending */}
+      <section className={cn("p-4 rounded-2xl border", adminCard(isDark))}>
+        <h3 className={cn("text-sm font-bold mb-4 flex items-center gap-2", adminTextPrimary(isDark))}>
+          <Clock size={16} className="text-yellow-500" />
+          در انتظار تایید
+          <span className={cn("text-xs font-normal px-2 py-0.5 rounded-full", isDark ? "bg-yellow-500/15 text-yellow-400" : "bg-yellow-50 text-yellow-700")}>
+            {formatPersianNumber(pendingRatings.length)}
+          </span>
+        </h3>
+        {pendingRatings.length === 0 ? (
+          <p className={cn("text-center py-10 text-sm", adminTextMuted(isDark))}>
+            {search ? "نظری یافت نشد" : "نظری در انتظار تایید نیست"}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {pendingRatings.map(rating => (
+              <ReviewCard
                 key={rating.id}
-                className={cn(
-                  "p-4 rounded-lg border",
-                  isDark
-                    ? "bg-neutral-800 border-white/10"
-                    : "bg-gray-50 border-gray-200"
-                )}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star
-                            key={i}
-                            size={16}
-                            className={
-                              i < rating.rating
-                                ? "text-yellow-400 fill-yellow-400"
-                                : isDark
-                                ? "text-gray-600"
-                                : "text-gray-300"
-                            }
-                          />
-                        ))}
-                      </div>
-                      <span className={cn("text-sm font-medium", isDark ? "text-gray-300" : "text-gray-700")}>
-                        {rating.customer_name || rating.customer_phone || "مشتری"}
-                      </span>
-                    </div>
-                    <p className={cn("text-xs", isDark ? "text-gray-500" : "text-gray-500")}>
-                      {formatJalaliDate(timestampToJalali(rating.createdAt))}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleApprove(rating.id, false)}
-                    disabled={approving === rating.id}
-                    className={cn(
-                      isDark
-                        ? "border-yellow-600 text-yellow-400 hover:bg-yellow-900/20"
-                        : "border-yellow-300 text-yellow-600 hover:bg-yellow-50"
-                    )}
-                  >
-                    {approving === rating.id ? (
-                      <Loader2 className="animate-spin w-4 h-4" />
-                    ) : (
-                      "لغو تایید"
-                    )}
-                  </Button>
-                </div>
-                {rating.review_text && (
-                  <p className={cn("text-sm mt-2", isDark ? "text-gray-400" : "text-gray-600")}>
-                    {rating.review_text}
-                  </p>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+                rating={rating}
+                isDark={isDark}
+                approving={approving}
+                variant="pending"
+                onApprove={() => handleApprove(rating.id, true)}
+                onDelete={() => handleDelete(rating.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Approved */}
+      <section className={cn("p-4 rounded-2xl border", adminCard(isDark))}>
+        <h3 className={cn("text-sm font-bold mb-4 flex items-center gap-2", adminTextPrimary(isDark))}>
+          <ShieldCheck size={16} className="text-emerald-500" />
+          تایید شده
+          <span className={cn("text-xs font-normal px-2 py-0.5 rounded-full", isDark ? "bg-emerald-500/15 text-emerald-400" : "bg-emerald-50 text-emerald-700")}>
+            {formatPersianNumber(approvedRatings.length)}
+          </span>
+        </h3>
+        {approvedRatings.length === 0 ? (
+          <p className={cn("text-center py-10 text-sm", adminTextMuted(isDark))}>
+            {search ? "نظری یافت نشد" : "هنوز نظری تایید نشده است"}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {approvedRatings.map(rating => (
+              <ReviewCard
+                key={rating.id}
+                rating={rating}
+                isDark={isDark}
+                approving={approving}
+                variant="approved"
+                onUnapprove={() => handleApprove(rating.id, false)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 };
 
 export default RatingsApproval;
-

@@ -24,8 +24,17 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatToman, toPersianDigits } from "@/utils/format";
+import { formatToman, toPersianDigits, toEnglishDigits } from "@/utils/format";
+import { timestampToJalaliString } from "@/utils/dateFormatter";
+import { jalaliToTimestamp, timestampToJalali } from "@/utils/jalaliDateUtils";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
+import { getAuthHeaders } from "@/services/dbService";
+import {
+  adminInput,
+  adminSelectContent,
+  adminSelectItem,
+  adminSelectTrigger
+} from "@/lib/adminTheme";
 
 interface Expense {
   id: string;
@@ -54,6 +63,13 @@ const categoryLabels = {
   other: "سایر"
 };
 
+const todayJalali = () => timestampToJalali(Math.floor(Date.now() / 1000));
+
+const sanitizeAmount = (val: string) => toEnglishDigits(val).replace(/\D/g, "");
+
+const amountInputClass =
+  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]";
+
 const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [totals, setTotals] = useState<ExpenseTotals[]>([]);
@@ -65,7 +81,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
     category: "other" as Expense["category"],
     amount: "",
     description: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: todayJalali(),
   });
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
@@ -86,13 +102,16 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
         params.append("category", filters.category);
       }
       if (filters.dateFrom) {
-        params.append("dateFrom", filters.dateFrom);
+        params.append("dateFrom", String(jalaliToTimestamp(filters.dateFrom)));
       }
       if (filters.dateTo) {
-        params.append("dateTo", filters.dateTo);
+        params.append("dateTo", String(jalaliToTimestamp(filters.dateTo)));
       }
 
-      const response = await fetch(`/api/expenses?${params.toString()}`);
+      const response = await fetch(`/api/expenses?${params.toString()}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
       if (!response.ok) throw new Error("Failed to fetch expenses");
       const data = await response.json();
       setExpenses(data.expenses || []);
@@ -113,7 +132,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
         category: expense.category,
         amount: expense.amount.toString(),
         description: expense.description || "",
-        date: new Date(expense.date * 1000).toISOString().slice(0, 10),
+        date: timestampToJalali(expense.date),
       });
     } else {
       setEditingExpense(null);
@@ -121,7 +140,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
         category: "other",
         amount: "",
         description: "",
-        date: new Date().toISOString().slice(0, 10),
+        date: todayJalali(),
       });
     }
     setIsDialogOpen(true);
@@ -137,7 +156,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
         return;
       }
 
-      const amount = parseFloat(formData.amount);
+      const amount = parseInt(sanitizeAmount(formData.amount), 10);
       if (isNaN(amount) || amount <= 0) {
         setError("مبلغ باید یک عدد مثبت باشد");
         return;
@@ -150,12 +169,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
         body: JSON.stringify({
           category: formData.category,
-          amount: Math.round(amount),
+          amount,
           description: formData.description || null,
-          date: formData.date,
+          date: jalaliToTimestamp(formData.date),
         }),
       });
 
@@ -180,6 +200,8 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
     try {
       const response = await fetch(`/api/expenses/${id}`, {
         method: "DELETE",
+        credentials: "include",
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -193,6 +215,18 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
       alert(err.message);
     }
   };
+
+  const selectTriggerClass = cn(
+    "w-full",
+    adminSelectTrigger(isDark),
+    isDark ? "bg-neutral-800 border-white/10" : "bg-white"
+  );
+  const selectContentClass = adminSelectContent(isDark);
+  const inputClass = cn(
+    adminInput(isDark),
+    isDark ? "bg-neutral-800 border-white/10" : "bg-white border-gray-300"
+  );
+  const parsedAmount = parseInt(sanitizeAmount(formData.amount), 10);
 
   if (loading) {
     return (
@@ -279,18 +313,19 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
               <div className="space-y-2">
                 <Label className={isDark ? "text-gray-300" : "text-gray-700"}>دسته‌بندی</Label>
                 <Select
+                  dir="rtl"
                   value={filters.category}
                   onValueChange={(value) => setFilters({ ...filters, category: value })}
                 >
-                  <SelectTrigger className={cn(isDark ? "bg-neutral-800 border-white/10 text-white" : "bg-white")}>
+                  <SelectTrigger dir="rtl" className={selectTriggerClass}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">همه</SelectItem>
-                    <SelectItem value="rent">اجاره</SelectItem>
-                    <SelectItem value="bills">قبض</SelectItem>
-                    <SelectItem value="staff_salaries">حقوق کارکنان</SelectItem>
-                    <SelectItem value="other">سایر</SelectItem>
+                  <SelectContent dir="rtl" className={selectContentClass}>
+                    <SelectItem value="all" className={adminSelectItem}>همه</SelectItem>
+                    <SelectItem value="rent" className={adminSelectItem}>اجاره</SelectItem>
+                    <SelectItem value="bills" className={adminSelectItem}>قبض</SelectItem>
+                    <SelectItem value="staff_salaries" className={adminSelectItem}>حقوق کارکنان</SelectItem>
+                    <SelectItem value="other" className={adminSelectItem}>سایر</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -349,7 +384,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
                       className={cn("border-b", isDark ? "border-white/5" : "border-gray-100")}
                     >
                       <td className={cn("p-3", isDark ? "text-white" : "text-gray-900")}>
-                        {new Date(expense.date * 1000).toLocaleDateString("fa-IR")}
+                        {timestampToJalaliString(expense.date)}
                       </td>
                       <td className="p-3">
                         <Badge variant="outline">
@@ -391,12 +426,15 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className={cn(isDark ? "bg-neutral-900 border-white/10" : "bg-white")}>
-          <DialogHeader>
-            <DialogTitle className={isDark ? "text-white" : "text-gray-900"}>
+        <DialogContent
+          dir="rtl"
+          className={cn(isDark ? "bg-neutral-900 border-white/10" : "bg-white")}
+        >
+          <DialogHeader className="text-right space-y-1">
+            <DialogTitle className={cn("text-right pe-8", isDark ? "text-white" : "text-gray-900")}>
               {editingExpense ? "ویرایش هزینه" : "هزینه جدید"}
             </DialogTitle>
-            <DialogDescription className={isDark ? "text-gray-400" : "text-gray-600"}>
+            <DialogDescription className={cn("text-right pe-8", isDark ? "text-gray-400" : "text-gray-600")}>
               اطلاعات هزینه را وارد کنید
             </DialogDescription>
           </DialogHeader>
@@ -410,17 +448,18 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
             <div className="space-y-2">
               <Label className={isDark ? "text-gray-300" : "text-gray-700"}>دسته‌بندی</Label>
               <Select
+                dir="rtl"
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value as Expense["category"] })}
               >
-                <SelectTrigger className={cn(isDark ? "bg-neutral-800 border-white/10 text-white" : "bg-white")}>
+                <SelectTrigger dir="rtl" className={selectTriggerClass}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rent">اجاره</SelectItem>
-                  <SelectItem value="bills">قبض</SelectItem>
-                  <SelectItem value="staff_salaries">حقوق کارکنان</SelectItem>
-                  <SelectItem value="other">سایر</SelectItem>
+                <SelectContent dir="rtl" className={selectContentClass}>
+                  <SelectItem value="rent" className={adminSelectItem}>اجاره</SelectItem>
+                  <SelectItem value="bills" className={adminSelectItem}>قبض</SelectItem>
+                  <SelectItem value="staff_salaries" className={adminSelectItem}>حقوق کارکنان</SelectItem>
+                  <SelectItem value="other" className={adminSelectItem}>سایر</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -428,14 +467,21 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
             <div className="space-y-2">
               <Label className={isDark ? "text-gray-300" : "text-gray-700"}>مبلغ (تومان)</Label>
               <Input
-                type="number"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                placeholder="0"
-                className={cn(
-                  isDark ? "bg-neutral-800 border-white/10 text-white" : "bg-white border-gray-300"
-                )}
+                type="text"
+                inputMode="numeric"
+                value={formData.amount ? toPersianDigits(formData.amount) : ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, amount: sanitizeAmount(e.target.value) })
+                }
+                placeholder="۰"
+                dir="ltr"
+                className={cn(inputClass, amountInputClass, "text-left")}
               />
+              {parsedAmount > 0 && (
+                <p className={cn("text-sm font-medium", isDark ? "text-emerald-400" : "text-emerald-600")}>
+                  {formatToman(parsedAmount)}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -460,7 +506,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-row-reverse gap-2 sm:justify-start">
             <Button
               variant="outline"
               onClick={() => setIsDialogOpen(false)}

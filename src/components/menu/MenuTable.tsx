@@ -1,12 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
-import { Edit2, Trash2, Plus, Pin, Star, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import {
+  Edit2,
+  Trash2,
+  Plus,
+  Pin,
+  Star,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
+  MoreVertical
+} from "lucide-react";
 import { MenuItem } from "@/types";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { adminCard, adminTextPrimary, adminTextMuted } from "@/lib/adminTheme";
 
 interface MenuTableProps {
   items: MenuItem[];
@@ -31,6 +42,7 @@ const MenuTable: React.FC<MenuTableProps> = ({
 }) => {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [draggedOverItem, setDraggedOverItem] = useState<string | null>(null);
+  const [expandedActions, setExpandedActions] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, itemId: string) => {
     setDraggedItem(itemId);
@@ -46,305 +58,266 @@ const MenuTable: React.FC<MenuTableProps> = ({
     }
   };
 
-  const handleDragLeave = () => {
-    setDraggedOverItem(null);
-  };
+  const handleDragLeave = () => setDraggedOverItem(null);
 
   const handleDrop = async (e: React.DragEvent, targetItemId: string) => {
     e.preventDefault();
     setDraggedOverItem(null);
-
     if (!draggedItem || draggedItem === targetItemId || !onReorder) return;
 
     const draggedIndex = items.findIndex(item => item.id === draggedItem);
     const targetIndex = items.findIndex(item => item.id === targetItemId);
-
     if (draggedIndex === -1 || targetIndex === -1) return;
 
-    // Create new order array
     const newItems = [...items];
     const [removed] = newItems.splice(draggedIndex, 1);
     newItems.splice(targetIndex, 0, removed);
 
-    // Update display_order for all items
-    const itemOrders = newItems.map((item, index) => ({
-      id: item.id,
-      display_order: index + 1
-    }));
-
-    await onReorder(itemOrders);
+    await onReorder(
+      newItems.map((item, index) => ({ id: item.id, display_order: index + 1 }))
+    );
     setDraggedItem(null);
   };
 
   const handleMoveUp = async (index: number) => {
     if (index === 0 || !onReorder) return;
-
     const newItems = [...items];
     [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
-
-    const itemOrders = newItems.map((item, idx) => ({
-      id: item.id,
-      display_order: idx + 1
-    }));
-
-    await onReorder(itemOrders);
+    await onReorder(newItems.map((item, idx) => ({ id: item.id, display_order: idx + 1 })));
   };
 
   const handleMoveDown = async (index: number) => {
     if (index === items.length - 1 || !onReorder) return;
-
     const newItems = [...items];
     [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
-
-    const itemOrders = newItems.map((item, idx) => ({
-      id: item.id,
-      display_order: idx + 1
-    }));
-
-    await onReorder(itemOrders);
+    await onReorder(newItems.map((item, idx) => ({ id: item.id, display_order: idx + 1 })));
   };
 
   return (
-    <Card
-      className={cn(
-        "overflow-hidden shadow-lg",
-        isDark ? "bg-neutral-900 border-white/5" : "bg-white border-gray-300"
-      )}
-    >
-      <CardHeader className={cn("border-b", isDark ? "bg-neutral-900/50 border-white/5" : "bg-gray-50 border-gray-300")}>
-        <CardTitle className={cn("text-lg", isDark ? "text-gray-300" : "text-gray-900")}>
+    <Card className={cn("overflow-hidden", adminCard(isDark))}>
+      <CardHeader
+        className={cn(
+          "border-b py-4",
+          isDark ? "border-white/[0.06]" : "border-admin-border"
+        )}
+      >
+        <CardTitle className={cn("text-sm font-bold", adminTextPrimary(isDark))}>
           آیتم‌های منو ({toPersianDigits(items.length.toString())})
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y divide-white/5">
-          {items.length === 0 && (
-            <div className={cn("p-12 text-center text-lg", isDark ? "text-gray-500" : "text-gray-400")}>
-              هنوز آیتمی به منو اضافه نشده است.
-            </div>
-          )}
-          {items.map((item, index) => (
-            <div
-              key={item.id}
-              draggable={!!onReorder}
-              onDragStart={(e) => handleDragStart(e, item.id)}
-              onDragOver={(e) => handleDragOver(e, item.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, item.id)}
-              className={cn(
-                "p-4 flex items-center gap-4 hover:bg-white/5 transition-colors group cursor-move",
-                isDark ? "hover:bg-white/5" : "hover:bg-gray-50",
-                draggedItem === item.id && "opacity-50",
-                draggedOverItem === item.id && (isDark ? "bg-coffee-900/30 border-t-2 border-coffee-500" : "bg-coffee-50 border-t-2 border-coffee-500")
-              )}
-            >
-              {onReorder && (
-                <div className="flex flex-col gap-1">
-                  <GripVertical
-                    size={20}
-                    className={cn(
-                      "cursor-grab active:cursor-grabbing",
-                      isDark ? "text-gray-500" : "text-gray-400"
-                    )}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleMoveUp(index)}
-                    disabled={index === 0}
-                    className={cn(
-                      "h-6 w-6",
-                      isDark
-                        ? "text-gray-500 hover:text-white disabled:opacity-30"
-                        : "text-gray-400 hover:text-gray-900 disabled:opacity-30"
-                    )}
-                    title="جابجایی به بالا"
-                  >
-                    <ArrowUp size={12} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleMoveDown(index)}
-                    disabled={index === items.length - 1}
-                    className={cn(
-                      "h-6 w-6",
-                      isDark
-                        ? "text-gray-500 hover:text-white disabled:opacity-30"
-                        : "text-gray-400 hover:text-gray-900 disabled:opacity-30"
-                    )}
-                    title="جابجایی به پایین"
-                  >
-                    <ArrowDown size={12} />
-                  </Button>
-                </div>
-              )}
-              <img
-                src={
-                  item.imageUrl ||
-                  `https://picsum.photos/100/100?random=${item.id}`
-                }
-                alt={item.name}
+      <CardContent className="p-4">
+        {items.length === 0 ? (
+          <div
+            className={cn(
+              "p-12 text-center text-sm",
+              isDark ? "text-gray-500" : "text-gray-400"
+            )}
+          >
+            هنوز آیتمی به منو اضافه نشده است.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {items.map((item, index) => (
+              <div
+                key={item.id}
+                draggable={!!onReorder}
+                onDragStart={e => handleDragStart(e, item.id)}
+                onDragOver={e => handleDragOver(e, item.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={e => handleDrop(e, item.id)}
                 className={cn(
-                  "w-20 h-20 rounded-lg object-cover",
-                  isDark ? "bg-neutral-800" : "bg-gray-100"
+                  "group relative rounded-2xl border overflow-hidden transition-all",
+                  isDark
+                    ? "bg-white/[0.02] border-white/[0.06] hover:border-white/12"
+                    : "bg-admin-surface border-admin-border shadow-admin-card hover:shadow-admin-card-hover hover:border-admin-border-strong",
+                  draggedItem === item.id && "opacity-50",
+                  draggedOverItem === item.id &&
+                    (isDark
+                      ? "ring-2 ring-coffee-500/50"
+                      : "ring-2 ring-coffee-400/50")
                 )}
-              />
-              <div className="flex-grow">
-                <div className="flex items-baseline justify-between mb-2">
-                  <h4 className={cn("font-bold text-lg", isDark ? "text-white" : "text-gray-900")}>
-                    {item.name}
-                  </h4>
-                  <span className={cn("font-mono text-lg font-bold", isDark ? "text-coffee-400" : "text-coffee-600")}>
-                    {formatToman(item.price)}
-                  </span>
-                </div>
-                <p className={cn("text-sm line-clamp-1 mb-2 leading-6", isDark ? "text-gray-500" : "text-gray-600")}>
-                  {item.description}
-                </p>
-                <div className="flex gap-2 flex-wrap">
-                  <span
-                    className={cn(
-                      "text-xs font-medium px-2 py-1 rounded border",
-                      isDark
-                        ? "bg-neutral-800 text-gray-300 border-white/5"
-                        : "bg-gray-100 text-gray-700 border-gray-200"
+              >
+                {/* Image */}
+                <div className="relative aspect-[4/3] overflow-hidden">
+                  <img
+                    src={
+                      item.imageUrl ||
+                      `https://picsum.photos/400/300?random=${item.id}`
+                    }
+                    alt={item.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute bottom-2 right-2 left-2 flex items-end justify-between">
+                    <span className="text-white font-bold text-sm drop-shadow">
+                      {formatToman(item.price)}
+                    </span>
+                    {onReorder && (
+                      <GripVertical
+                        size={16}
+                        className="text-white/60 cursor-grab active:cursor-grabbing"
+                      />
                     )}
-                  >
-                    {item.category}
-                  </span>
-                  {item.is_pinned && (
-                    <span
-                      className={cn(
-                        "text-xs font-medium px-2 py-1 rounded border flex items-center gap-1",
-                        isDark
-                          ? "bg-yellow-900/30 text-yellow-400 border-yellow-900/50"
-                          : "bg-yellow-50 text-yellow-700 border-yellow-300"
-                      )}
-                    >
-                      <Pin size={12} />
-                      ثابت شده
-                    </span>
-                  )}
-                  {item.is_suggested && (
-                    <span
-                      className={cn(
-                        "text-xs font-medium px-2 py-1 rounded border flex items-center gap-1",
-                        isDark
-                          ? "bg-blue-900/30 text-blue-400 border-blue-900/50"
-                          : "bg-blue-50 text-blue-700 border-blue-300"
-                      )}
-                    >
-                      <Star size={12} />
-                      پیشنهاد امروز
-                    </span>
-                  )}
+                  </div>
                   {!item.available && (
-                    <span
-                      className={cn(
-                        "text-xs font-medium px-2 py-1 rounded border",
-                        isDark
-                          ? "bg-red-900/30 text-red-400 border-red-900/50"
-                          : "bg-red-50 text-red-600 border-red-300"
-                      )}
-                    >
+                    <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">
                       ناموجود
                     </span>
                   )}
                 </div>
-              </div>
-              <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onEdit(item)}
-                  className={cn(
-                    "h-9 w-9",
-                    isDark
-                      ? "bg-neutral-800 hover:bg-coffee-600 text-gray-400 hover:text-white"
-                      : "bg-gray-100 hover:bg-coffee-600 text-gray-600 hover:text-white"
-                  )}
-                  title="ویرایش"
-                >
-                  <Edit2 size={16} />
-                </Button>
-                {onTogglePin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onTogglePin(item.id, !item.is_pinned)}
+
+                {/* Content */}
+                <div className="p-3.5">
+                  <h4
                     className={cn(
-                      "h-9 w-9",
-                      item.is_pinned
-                        ? isDark
-                          ? "bg-yellow-900/30 hover:bg-yellow-800/50 text-yellow-400"
-                          : "bg-yellow-100 hover:bg-yellow-200 text-yellow-700"
-                        : isDark
-                        ? "bg-neutral-800 hover:bg-yellow-900/30 text-gray-400 hover:text-yellow-400"
-                        : "bg-gray-100 hover:bg-yellow-100 text-gray-600 hover:text-yellow-700"
+                      "font-bold text-sm mb-1 truncate",
+                      isDark ? "text-white" : "text-gray-900"
                     )}
-                    title={item.is_pinned ? "حذف از بالای منو" : "ثابت کردن در بالای منو"}
                   >
-                    <Pin size={16} fill={item.is_pinned ? "currentColor" : "none"} />
-                  </Button>
-                )}
-                {onToggleSuggest && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onToggleSuggest(item.id, !item.is_suggested)}
+                    {item.name}
+                  </h4>
+                  <p
                     className={cn(
-                      "h-9 w-9",
-                      item.is_suggested
-                        ? isDark
-                          ? "bg-blue-900/30 hover:bg-blue-800/50 text-blue-400"
-                          : "bg-blue-100 hover:bg-blue-200 text-blue-700"
-                        : isDark
-                        ? "bg-neutral-800 hover:bg-blue-900/30 text-gray-400 hover:text-blue-400"
-                        : "bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-700"
+                      "text-xs line-clamp-2 mb-2.5 leading-5 min-h-[2.5rem]",
+                      isDark ? "text-gray-500" : "text-gray-500"
                     )}
-                    title={item.is_suggested ? "حذف از پیشنهادات" : "اضافه به پیشنهادات"}
                   >
-                    <Star size={16} fill={item.is_suggested ? "currentColor" : "none"} />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onManageIngredients(item.id)}
-                  className={cn(
-                    "h-9 w-9",
-                    isDark
-                      ? "bg-neutral-800 hover:bg-emerald-600 text-gray-400 hover:text-white"
-                      : "bg-gray-100 hover:bg-emerald-600 text-gray-600 hover:text-white"
+                    {item.description}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium px-1.5 py-0.5 rounded-md",
+                        isDark ? "bg-white/5 text-gray-400" : "bg-gray-100 text-gray-600"
+                      )}
+                    >
+                      {item.category}
+                    </span>
+                    {item.is_pinned && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-500 flex items-center gap-0.5">
+                        <Pin size={9} />
+                        ثابت
+                      </span>
+                    )}
+                    {item.is_suggested && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 flex items-center gap-0.5">
+                        <Star size={9} />
+                        پیشنهاد
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions — always visible on mobile, hover on desktop */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(item)}
+                      className={cn(
+                        "flex-1 h-8 text-xs",
+                        isDark
+                          ? "bg-white/5 hover:bg-coffee-600/80 text-gray-300 hover:text-white"
+                          : "bg-gray-50 hover:bg-coffee-600 hover:text-white text-gray-700"
+                      )}
+                    >
+                      <Edit2 size={13} className="ml-1" />
+                      ویرایش
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setExpandedActions(
+                          expandedActions === item.id ? null : item.id
+                        )
+                      }
+                      className={cn(
+                        "h-8 w-8 shrink-0",
+                        isDark ? "bg-white/5 text-gray-400" : "bg-gray-50 text-gray-500"
+                      )}
+                    >
+                      <MoreVertical size={14} />
+                    </Button>
+                  </div>
+
+                  {expandedActions === item.id && (
+                    <div className="mt-2 pt-2 border-t border-white/5 grid grid-cols-2 gap-1">
+                      {onTogglePin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onTogglePin(item.id, !item.is_pinned)}
+                          className="h-7 text-[10px] justify-start"
+                        >
+                          <Pin size={11} className="ml-1" />
+                          {item.is_pinned ? "حذف ثابت" : "ثابت کردن"}
+                        </Button>
+                      )}
+                      {onToggleSuggest && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            onToggleSuggest(item.id, !item.is_suggested)
+                          }
+                          className="h-7 text-[10px] justify-start"
+                        >
+                          <Star size={11} className="ml-1" />
+                          پیشنهاد
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onManageIngredients(item.id)}
+                        className="h-7 text-[10px] justify-start"
+                      >
+                        <Plus size={11} className="ml-1" />
+                        مواد اولیه
+                      </Button>
+                      {onReorder && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMoveUp(index)}
+                            disabled={index === 0}
+                            className="h-7 text-[10px] justify-start"
+                          >
+                            <ArrowUp size={11} className="ml-1" />
+                            بالا
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMoveDown(index)}
+                            disabled={index === items.length - 1}
+                            className="h-7 text-[10px] justify-start"
+                          >
+                            <ArrowDown size={11} className="ml-1" />
+                            پایین
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDelete(item.id)}
+                        className="h-7 text-[10px] justify-start text-red-400 hover:text-red-300 col-span-2"
+                      >
+                        <Trash2 size={11} className="ml-1" />
+                        حذف
+                      </Button>
+                    </div>
                   )}
-                  title="مواد اولیه"
-                >
-                  <Plus size={16} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDelete(item.id)}
-                  className={cn(
-                    "h-9 w-9",
-                    isDark
-                      ? "bg-neutral-800 hover:bg-red-600 text-gray-400 hover:text-white"
-                      : "bg-gray-100 hover:bg-red-600 text-gray-600 hover:text-white"
-                  )}
-                  title="حذف"
-                >
-                  <Trash2 size={16} />
-                </Button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 };
 
 export default MenuTable;
-
-

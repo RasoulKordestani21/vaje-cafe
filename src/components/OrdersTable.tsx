@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  adminTableWrap,
+  adminTableHead,
+  adminTableRow,
+  adminTextPrimary,
+  adminTextMuted
+} from "@/lib/adminTheme";
 
 interface OrderItem {
   id: string;
@@ -122,39 +129,34 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
   };
 
   return (
-    <div className={cn(
-      "overflow-x-auto rounded-2xl border",
-      isDark ? "border-white/10 bg-neutral-900/50" : "border-gray-300 bg-white"
-    )}>
+    <div className={cn("overflow-x-auto rounded-2xl border", adminTableWrap(isDark))}>
       <Table>
         <TableHeader>
-          <TableRow className={cn(
-            isDark ? "border-white/10 bg-neutral-900" : "border-gray-200 bg-gray-50"
-          )}>
+          <TableRow className={adminTableHead(isDark)}>
             {onToggleSelect && (
               <TableHead className="w-12 text-center">
                 {/* Checkbox column header */}
               </TableHead>
             )}
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               نام مشتری
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               تاریخ
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               محصولات
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               مبلغ کل
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               منبع
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               وضعیت
             </TableHead>
-            <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>
+            <TableHead className={cn("text-right", adminTextMuted(isDark))}>
               عملیات
             </TableHead>
           </TableRow>
@@ -176,8 +178,8 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                 <TableRow
                   key={order.id}
                   className={cn(
-                    isDark ? "border-white/5 hover:bg-neutral-900" : "border-gray-200 hover:bg-gray-50",
-                    isSelected && (isDark ? "bg-coffee-900/20" : "bg-coffee-50")
+                    adminTableRow(isDark),
+                    isSelected && (isDark ? "bg-coffee-900/20" : "bg-coffee-50/80")
                   )}
                 >
                   {onToggleSelect && (
@@ -196,7 +198,7 @@ export const OrdersTable: React.FC<OrdersTableProps> = ({
                       </Button>
                     </TableCell>
                   )}
-                  <TableCell className={cn("font-semibold", isDark ? "text-white" : "text-gray-900")}>
+                  <TableCell className={cn("font-semibold", adminTextPrimary(isDark))}>
                     {order.customerName || "نام معرفی نشده"}
                   </TableCell>
                   <TableCell className={isDark ? "text-gray-300" : "text-gray-700"}>

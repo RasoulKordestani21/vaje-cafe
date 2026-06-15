@@ -193,6 +193,19 @@ module.exports = {
           border:               "var(--user-border)",
           "border-dark":        "var(--user-border-dark)",
         },
+
+        // ── Admin panel surfaces (light mode) ─────────────────────────────
+        admin: {
+          canvas:          "var(--admin-canvas)",
+          sidebar:         "var(--admin-sidebar)",
+          surface:         "var(--admin-surface)",
+          muted:           "var(--admin-muted)",
+          border:          "var(--admin-border)",
+          "border-strong": "var(--admin-border-strong)",
+          primary:         "var(--admin-primary)",
+          secondary:       "var(--admin-secondary)",
+          "muted-text":    "var(--admin-muted-text)",
+        },
       },
 
       borderRadius: {
@@ -213,6 +226,9 @@ module.exports = {
         soft: "var(--shadow-soft)",
         card: "var(--shadow-card)",
         nav:  "var(--shadow-nav)",
+        "admin-card":       "0 1px 2px rgb(15 23 42 / 0.05), 0 4px 14px -2px rgb(15 23 42 / 0.08)",
+        "admin-card-hover": "0 2px 4px rgb(15 23 42 / 0.06), 0 8px 20px -4px rgb(15 23 42 / 0.10)",
+        "admin-header":     "0 1px 0 rgb(15 23 42 / 0.08)",
       },
 
       transitionDuration: {
@@ -222,11 +238,12 @@ module.exports = {
       },
 
       screens: {
-        sm:   "var(--breakpoint-sm)",
-        md:   "var(--breakpoint-md)",
-        lg:   "var(--breakpoint-lg)",
-        xl:   "var(--breakpoint-xl)",
-        "2xl": "var(--breakpoint-2xl)",
+        // Literal values required — CSS vars don't work inside @media queries
+        sm:   "640px",
+        md:   "768px",
+        lg:   "1024px",
+        xl:   "1280px",
+        "2xl": "1400px",
       },
     }
   },

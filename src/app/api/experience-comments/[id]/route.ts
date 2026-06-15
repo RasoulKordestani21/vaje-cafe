@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
 import { ensureAdmin } from "@/lib/auth";
+import {
+  awardLoyaltyPoints,
+  LOYALTY_POINTS_EXPERIENCE_COMMENT,
+  LOYALTY_POINTS_MENU_ITEM_COMMENT,
+} from "@/lib/loyaltyService";
 
 // PUT update comment (admin only - for approval/rejection)
 export async function PUT(
@@ -16,13 +21,15 @@ export async function PUT(
     const body = await request.json();
     const { admin_approved, comment_text } = body;
 
-    const existing = db.prepare("SELECT * FROM experience_comments WHERE id = ?").get(id);
+    const existing = db.prepare("SELECT * FROM experience_comments WHERE id = ?").get(id) as any;
     if (!existing) {
       return NextResponse.json(
         { error: "Comment not found" },
         { status: 404 }
       );
     }
+
+    const wasApproved = Boolean(existing.admin_approved);
 
     const updateFields: string[] = [];
     const updateValues: any[] = [];
@@ -54,6 +61,39 @@ export async function PUT(
       WHERE id = ?
     `).run(...updateValues);
 
+    // Award loyalty points on first approval (logged-in customers only)
+    let loyaltyAward: { awarded: boolean; points?: number } = { awarded: false };
+    if (
+      admin_approved === true &&
+      !wasApproved &&
+      existing.customer_id
+    ) {
+      const isMenuComment = Boolean(existing.menu_item_id);
+      const points = isMenuComment
+        ? LOYALTY_POINTS_MENU_ITEM_COMMENT
+        : LOYALTY_POINTS_EXPERIENCE_COMMENT;
+      const sourceType = isMenuComment ? "menu_item_comment" : "experience_comment";
+      let menuItemName = "";
+      if (isMenuComment) {
+        const mi = db
+          .prepare("SELECT name FROM menu_items WHERE id = ?")
+          .get(existing.menu_item_id) as { name?: string } | undefined;
+        menuItemName = mi?.name || "";
+      }
+      const description = isMenuComment
+        ? `امتیاز نظر منو${menuItemName ? `: ${menuItemName}` : ""}`
+        : "امتیاز نظر تجربه مشتری";
+
+      const result = awardLoyaltyPoints(db, {
+        customerId: existing.customer_id,
+        points,
+        sourceType,
+        sourceId: id,
+        description,
+      });
+      loyaltyAward = { awarded: result.awarded, points: result.awarded ? points : undefined };
+    }
+
     const updated = db.prepare("SELECT * FROM experience_comments WHERE id = ?").get(id) as any;
 
     return NextResponse.json({
@@ -62,6 +102,7 @@ export async function PUT(
       admin_approved: Boolean(updated.admin_approved),
       created_at: formatTimestamp(updated.created_at),
       updated_at: formatTimestamp(updated.updated_at),
+      loyalty_awarded: loyaltyAward,
     });
   } catch (error) {
     console.error("Experience comment PUT error:", error);
@@ -103,6 +144,3 @@ export async function DELETE(
     );
   }
 }
-
-
-

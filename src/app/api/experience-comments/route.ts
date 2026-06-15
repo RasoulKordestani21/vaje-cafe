@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const db = getDatabase();
     const { searchParams } = new URL(request.url);
     const approvedOnly = searchParams.get("approved_only") !== "false"; // Default true
+    const menuItemId = searchParams.get("menu_item_id");
     const limit = searchParams.get("limit");
     const offset = searchParams.get("offset");
 
@@ -18,12 +19,22 @@ export async function GET(request: NextRequest) {
     const isAdmin = authHeader && ensureAdmin(request) === null;
 
     let query = `
-      SELECT ec.*, c.profilePicture as customer_profile_picture
+      SELECT ec.*, c.profilePicture as customer_profile_picture,
+        mi.name as menu_item_name
       FROM experience_comments ec
       LEFT JOIN customers c ON ec.customer_id = c.id
+      LEFT JOIN menu_items mi ON ec.menu_item_id = mi.id
       WHERE 1=1
     `;
     const params: any[] = [];
+
+    if (menuItemId) {
+      query += ` AND ec.menu_item_id = ?`;
+      params.push(menuItemId);
+    } else if (!isAdmin && approvedOnly) {
+      // Public experience page: only general experience comments (not menu-item ones)
+      query += ` AND ec.menu_item_id IS NULL`;
+    }
 
     // Public users only see approved comments
     if (!isAdmin && approvedOnly) {
@@ -51,6 +62,7 @@ export async function GET(request: NextRequest) {
       created_at: formatTimestamp(c.created_at),
       updated_at: formatTimestamp(c.updated_at),
       customer_profile_picture: c.customer_profile_picture || null,
+      menu_item_name: c.menu_item_name || null,
     }));
 
     return NextResponse.json({ comments: formattedComments });
@@ -68,7 +80,7 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDatabase();
     const body = await request.json();
-    const { comment_text, rating, customer_name, customer_phone } = body;
+    const { comment_text, rating, customer_name, customer_phone, menu_item_id } = body;
 
     if (!comment_text || !rating) {
       return NextResponse.json(
@@ -95,12 +107,19 @@ export async function POST(request: NextRequest) {
       // Allow anonymous comments
     }
 
+    if (menu_item_id) {
+      const menuItem = db.prepare("SELECT id FROM menu_items WHERE id = ?").get(menu_item_id);
+      if (!menuItem) {
+        return NextResponse.json({ error: "آیتم منو یافت نشد" }, { status: 404 });
+      }
+    }
+
     const id = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
 
     db.prepare(`
-      INSERT INTO experience_comments (id, customer_id, comment_text, rating, admin_approved, customer_name, customer_phone, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO experience_comments (id, customer_id, comment_text, rating, admin_approved, customer_name, customer_phone, menu_item_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       customerId,
@@ -109,6 +128,7 @@ export async function POST(request: NextRequest) {
       0, // Requires admin approval
       customer_name || null,
       customer_phone || null,
+      menu_item_id || null,
       now,
       now
     );

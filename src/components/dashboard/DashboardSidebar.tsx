@@ -372,7 +372,7 @@ export default function DashboardSidebar({
               : "bg-coffee-600/10 text-coffee-700 border-coffee-600"
             : isDark
               ? "text-gray-400 hover:bg-white/5 hover:text-gray-200 border-transparent"
-              : "text-gray-500 hover:bg-gray-100 hover:text-gray-800 border-transparent"
+              : "text-admin-secondary hover:bg-admin-muted hover:text-admin-primary border-transparent"
         )}
         title={!expanded ? item.label : undefined}
       >
@@ -419,7 +419,7 @@ export default function DashboardSidebar({
 
   const panelClassName = cn(
     "bg-inherit",
-    isDark ? "border-white/5" : "border-gray-200"
+    isDark ? "border-white/5" : "border-admin-border"
   );
 
   const renderSidebarPanel = (
@@ -470,7 +470,7 @@ export default function DashboardSidebar({
             <span
               className={cn(
                 "text-sm font-semibold truncate",
-                isDark ? "text-white" : "text-gray-900"
+                isDark ? "text-white" : "text-admin-primary"
               )}
             >
               پنل مدیریت
@@ -486,7 +486,7 @@ export default function DashboardSidebar({
               "p-1.5 rounded-lg transition-colors",
               isDark
                 ? "hover:bg-white/10 text-gray-400 hover:text-white"
-                : "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
+                : "hover:bg-admin-muted text-admin-secondary hover:text-admin-primary"
             )}
             title={options.toggleTitle}
             aria-label={options.toggleTitle}
@@ -531,7 +531,7 @@ export default function DashboardSidebar({
                 "absolute end-full me-3 w-48 rounded-xl border p-3 shadow-xl animate-in fade-in slide-in-from-right-2 duration-300",
                 isDark
                   ? "bg-neutral-800 border-white/10 text-gray-100"
-                  : "bg-white border-gray-200 text-gray-800"
+                  : "bg-admin-surface border-admin-border text-admin-primary shadow-md"
               )}
               role="status"
               aria-live="polite"
@@ -593,7 +593,7 @@ export default function DashboardSidebar({
             "fixed inset-y-0 start-0 z-50 flex flex-col h-screen border-l shadow-2xl",
             isDark
               ? "bg-[#111318] border-white/5"
-              : "bg-[#fafafa] border-gray-200"
+              : "bg-admin-sidebar border-admin-border"
           )}
           style={{ width: MOBILE_OVERLAY_WIDTH }}
         >
@@ -614,7 +614,7 @@ export default function DashboardSidebar({
             isResizing ? "transition-none" : "transition-[width] duration-200",
             isDark
               ? "bg-[#111318] border-white/5"
-              : "bg-[#fafafa] border-gray-200"
+              : "bg-admin-sidebar border-admin-border"
           )}
           style={{ width: desktopWidth }}
         >

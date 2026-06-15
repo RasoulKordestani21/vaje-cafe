@@ -2,12 +2,12 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
 import { verifyCustomerAuth } from "@/lib/customerAuthMiddleware";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 
 // GET all customer messages (admin only)
 export async function GET(request: NextRequest) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
@@ -15,7 +15,14 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get("unread_only") === "true";
 
     let query = `
-      SELECT m.*, c.name as customer_name, c.phone as customer_phone
+      SELECT m.*,
+        COALESCE(c.name, m.customer_name) as customer_name,
+        COALESCE(c.phone, m.customer_phone) as customer_phone,
+        c.email as customer_email,
+        c.profilePicture as customer_profile_picture,
+        c.totalOrders as customer_total_orders,
+        c.totalSpent as customer_total_spent,
+        c.loyalty_points_balance as customer_loyalty_points
       FROM customer_messages m
       LEFT JOIN customers c ON m.customer_id = c.id
       WHERE 1=1

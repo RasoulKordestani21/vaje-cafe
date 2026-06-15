@@ -1149,6 +1149,51 @@ export function initializeDatabase() {
   } catch (e) {
     console.warn("Could not add loyalty_points_balance column to customers table", e);
   }
+
+  // Add source tracking columns to loyalty_points
+  try {
+    const lpColumns = db.pragma("table_info(loyalty_points)") as Array<{ name: string }>;
+    const lpNames = lpColumns.map(c => c.name.toLowerCase());
+    if (!lpNames.includes("source_type")) {
+      db.exec(`ALTER TABLE loyalty_points ADD COLUMN source_type TEXT`);
+      console.log("✅ Added source_type column to loyalty_points");
+    }
+    if (!lpNames.includes("source_id")) {
+      db.exec(`ALTER TABLE loyalty_points ADD COLUMN source_id TEXT`);
+      console.log("✅ Added source_id column to loyalty_points");
+    }
+    db.exec(`
+      UPDATE loyalty_points SET source_type = 'order', source_id = order_id
+      WHERE order_id IS NOT NULL AND (source_type IS NULL OR source_type = '')
+    `);
+    db.exec(`
+      UPDATE loyalty_points SET source_type = 'reward', source_id = reward_id
+      WHERE reward_id IS NOT NULL AND transaction_type = 'redeemed'
+        AND (source_type IS NULL OR source_type = '')
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_loyalty_points_source
+      ON loyalty_points(source_type, source_id)
+    `);
+  } catch (e) {
+    console.warn("Could not migrate loyalty_points source columns", e);
+  }
+
+  // Add menu_item_id to experience_comments for menu-item reviews
+  try {
+    const ecColumns = db.pragma("table_info(experience_comments)") as Array<{ name: string }>;
+    const ecNames = ecColumns.map(c => c.name.toLowerCase());
+    if (!ecNames.includes("menu_item_id")) {
+      db.exec(`ALTER TABLE experience_comments ADD COLUMN menu_item_id TEXT REFERENCES menu_items(id)`);
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_experience_comments_menu_item
+        ON experience_comments(menu_item_id, admin_approved)
+      `);
+      console.log("✅ Added menu_item_id column to experience_comments");
+    }
+  } catch (e) {
+    console.warn("Could not add menu_item_id to experience_comments", e);
+  }
 }
 
 // Get database connection

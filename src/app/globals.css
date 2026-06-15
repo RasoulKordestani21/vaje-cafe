@@ -102,6 +102,17 @@
   --breakpoint-lg:   1024px;
   --breakpoint-xl:   1280px;
   --breakpoint-2xl:  1400px;
+
+  /* ── Admin panel (light) ─────────────────────────────────────────────────── */
+  --admin-canvas:         #dfe4ec;   /* page background — clear separation from cards */
+  --admin-sidebar:        #eef1f6;   /* sidebar — slightly tinted */
+  --admin-surface:        #ffffff;   /* cards, header, inputs */
+  --admin-muted:          #e8ecf2;   /* subtle fills, icon buttons */
+  --admin-border:         #c5ced9;   /* default borders */
+  --admin-border-strong:  #a8b4c4;   /* inputs, emphasis */
+  --admin-primary:        #0f172a;   /* slate-900 — primary text */
+  --admin-secondary:      #475569;   /* slate-600 — labels */
+  --admin-muted-text:     #64748b;   /* slate-500 — hints */
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
