@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
+import { getAdminAuth } from "@/lib/adminApiAuth";
 
 /**
- * Validate current session/auth cookie
- * Returns 200 if valid, 401 if invalid/expired
+ * Validate current admin auth — session cookie OR x-access-token.
+ * Returns 200 if valid, 401 if invalid/expired.
  */
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
+    const auth = getAdminAuth(request);
 
-    if (error || !user) {
+    if (!auth.authenticated) {
       return NextResponse.json(
         { authenticated: false, error: "Session invalid or expired" },
         { status: 401 }
@@ -20,11 +20,12 @@ export async function GET(request: NextRequest) {
       {
         authenticated: true,
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name
+          id: auth.userId,
+          email: auth.email,
+          name: auth.name,
         },
-        role: user.role
+        role: auth.role,
+        method: auth.method,
       },
       { status: 200 }
     );

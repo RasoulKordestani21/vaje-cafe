@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useCustomer } from "@/context/CustomerContext";
+import { useToast } from "@/components/ui/toast";
 import { formatJalaliDate } from "@/utils/jalaliDateUtils";
 
 interface Comment {
@@ -33,6 +34,7 @@ const MenuItemComments: React.FC<MenuItemCommentsProps> = ({
   isDark = true 
 }) => {
   const { customer, isAuthenticated } = useCustomer();
+  const { success, error: showError, warning } = useToast();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -42,8 +44,6 @@ const MenuItemComments: React.FC<MenuItemCommentsProps> = ({
   const [customerName, setCustomerName] = useState(customer?.name || "");
   const [customerPhone, setCustomerPhone] = useState(customer?.phoneNumber || "");
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchComments();
@@ -70,17 +70,16 @@ const MenuItemComments: React.FC<MenuItemCommentsProps> = ({
     e.preventDefault();
     
     if (!rating || rating < 1 || rating > 5) {
-      setError("لطفاً امتیاز خود را انتخاب کنید");
+      warning("لطفاً امتیاز خود را انتخاب کنید");
       return;
     }
 
     if (!commentText.trim()) {
-      setError("لطفاً نظر خود را بنویسید");
+      warning("لطفاً نظر خود را بنویسید");
       return;
     }
 
     setSubmitting(true);
-    setError(null);
 
     try {
       const response = await fetch("/api/experience-comments", {
@@ -103,16 +102,13 @@ const MenuItemComments: React.FC<MenuItemCommentsProps> = ({
         throw new Error(errorData.error || "خطا در ثبت نظر");
       }
 
-      setSuccess(true);
+      success("نظر شما با موفقیت ثبت شد و پس از تایید مدیر نمایش داده خواهد شد.");
       setCommentText("");
       setRating(0);
       setShowForm(false);
-      setTimeout(() => {
-        setSuccess(false);
-        fetchComments();
-      }, 2000);
+      fetchComments();
     } catch (err: any) {
-      setError(err.message || "خطا در ثبت نظر");
+      showError(err.message || "خطا در ثبت نظر");
     } finally {
       setSubmitting(false);
     }
@@ -161,18 +157,6 @@ const MenuItemComments: React.FC<MenuItemCommentsProps> = ({
           isDark ? "bg-neutral-800/50 border-white/5" : "bg-white border-gray-200"
         )}>
           <CardContent className="p-4">
-            {success && (
-              <div className="mb-3 p-2 rounded-lg bg-green-900/30 border border-green-900/50 text-green-400 text-xs">
-                نظر شما با موفقیت ثبت شد و پس از تایید مدیر نمایش داده خواهد شد.
-              </div>
-            )}
-
-            {error && (
-              <div className="mb-3 p-2 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400 text-xs">
-                {error}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-3">
               {/* Rating Stars */}
               <div>

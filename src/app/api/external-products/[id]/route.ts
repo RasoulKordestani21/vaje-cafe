@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import * as externalProductsService from "@/services/externalProductsService";
 
 /**
@@ -51,15 +52,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const product = externalProductsService.updateExternalProduct(
@@ -89,15 +83,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const deleted = externalProductsService.deleteExternalProduct(params.id);
 

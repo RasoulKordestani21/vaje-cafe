@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { formatPersianNumber, timestampToJalaliString } from "@/utils/dateFormatter";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import CustomerAvatar from "@/components/customers/CustomerAvatar";
 import {
   adminCard,
@@ -161,6 +163,8 @@ function CustomerInfoCard({
 }
 
 const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDark }) => {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [messages, setMessages] = useState<CustomerMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +191,9 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
       setMessages(data.messages || []);
     } catch (err: unknown) {
       console.error("Failed to fetch messages:", err);
-      setError(err instanceof Error ? err.message : "خطا در بارگذاری");
+      const message = err instanceof Error ? err.message : "خطا در بارگذاری";
+      setError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -218,9 +224,13 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
       if (response.ok) {
         await fetchMessages();
         setIsEditing(false);
+        success("پیام با موفقیت بروزرسانی شد");
+      } else {
+        showError("خطا در بروزرسانی پیام");
       }
     } catch (err) {
       console.error("Failed to update message:", err);
+      showError("خطا در بروزرسانی پیام");
     } finally {
       setProcessing(null);
     }
@@ -260,9 +270,15 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
         credentials: "include",
         body: JSON.stringify({ admin_read: read })
       });
-      if (response.ok) await fetchMessages();
+      if (response.ok) {
+        await fetchMessages();
+        success(read ? "پیام به‌عنوان خوانده‌شده علامت‌گذاری شد" : "پیام به‌عنوان خوانده‌نشده علامت‌گذاری شد");
+      } else {
+        showError("خطا در بروزرسانی وضعیت پیام");
+      }
     } catch (err) {
       console.error("Failed to update message:", err);
+      showError("خطا در بروزرسانی وضعیت پیام");
     } finally {
       setProcessing(null);
     }
@@ -286,16 +302,26 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
         setReplyText("");
         setSelectedMessage(null);
         await fetchMessages();
+        success("پاسخ با موفقیت ارسال شد");
+      } else {
+        showError("خطا در ارسال پاسخ");
       }
     } catch (err) {
       console.error("Failed to reply:", err);
+      showError("خطا در ارسال پاسخ");
     } finally {
       setProcessing(null);
     }
   };
 
   const handleDelete = async (messageId: string) => {
-    if (!confirm("آیا از حذف این پیام اطمینان دارید؟")) return;
+    const ok = await confirm({
+      title: "حذف پیام",
+      message: "آیا از حذف این پیام اطمینان دارید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       setProcessing(messageId);
       const response = await fetch(`/api/customer-messages/${messageId}`, {
@@ -309,9 +335,13 @@ const CustomerMessagesManager: React.FC<CustomerMessagesManagerProps> = ({ isDar
           setSelectedMessage(null);
           cancelEditing();
         }
+        success("پیام با موفقیت حذف شد");
+      } else {
+        showError("خطا در حذف پیام");
       }
     } catch (err) {
       console.error("Failed to delete message:", err);
+      showError("خطا در حذف پیام");
     } finally {
       setProcessing(null);
     }

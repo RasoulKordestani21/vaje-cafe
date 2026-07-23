@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import crypto from "crypto";
 
 // PUT update reward (admin only)
@@ -9,14 +9,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const sessionAuth = validateSession(request);
-    
-    if (!sessionAuth.user || sessionAuth.error) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
@@ -93,14 +87,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const sessionAuth = validateSession(request);
-    
-    if (!sessionAuth.user || sessionAuth.error) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
@@ -126,6 +114,5 @@ export async function DELETE(
     );
   }
 }
-
 
 

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const sizeClasses = {
   sm: "size-12",
   md: "size-[72px]",
-  lg: "size-20",
+  lg: "size-20"
 } as const;
 
 /** Force true circles — bypasses theme --radius-full which may be a small rem value */
@@ -16,13 +16,13 @@ const circle = "rounded-[50%]";
 const insetClasses = {
   sm: "inset-[2px]",
   md: "inset-[3px]",
-  lg: "inset-[3px]",
+  lg: "inset-[3px]"
 } as const;
 
 const imageInsetClasses = {
   sm: "inset-[4px]",
   md: "inset-[5px]",
-  lg: "inset-[5px]",
+  lg: "inset-[5px]"
 } as const;
 
 interface StoryAvatarProps {
@@ -44,7 +44,7 @@ const StoryAvatar: React.FC<StoryAvatarProps> = ({
   onClick,
   ringOnly = false,
   className,
-  onImageError,
+  onImageError
 }) => {
   const ring = (
     <div
@@ -58,7 +58,10 @@ const StoryAvatar: React.FC<StoryAvatarProps> = ({
     >
       {/* Gradient ring — absolute layers on a fixed square = guaranteed circle */}
       <div
-        className={cn("absolute inset-0 bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500", circle)}
+        className={cn(
+          "absolute inset-0 bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-500",
+          circle
+        )}
         aria-hidden
       />
       <div

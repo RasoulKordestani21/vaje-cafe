@@ -3,31 +3,28 @@
 import React, { useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, X, Star, MapPin, Clock, Shield,
-  Headphones, Truck, ChevronLeft,
+  ArrowLeft,
+  X,
+  Star,
+  MapPin,
+  Clock,
+  Shield,
+  Headphones,
+  Truck,
+  ChevronLeft
 } from "lucide-react";
-import { ToastContainer, useToast } from "@/components/ui/toast";
+import { useToast } from "@/components/ui/toast";
 import HomepageReviews from "@/components/ratings/HomepageReviews";
 import ExperienceCommentsDisplay from "@/components/experience/ExperienceCommentsDisplay";
+import CustomerStories from "@/components/stories/CustomerStories";
 import { ThemeContext } from "@/app/providers";
+import { useSiteSettings } from "@/context/SiteSettingsContext";
 import { CATEGORIES, MenuItem } from "@/types";
+import { menuItemMatchesCategory } from "@/constants/menuCategories";
 import { formatToman } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface SiteSettings {
-  hero_title?: string;
-  hero_subtitle?: string;
-  feature_1_title?: string;
-  feature_1_description?: string;
-  feature_2_title?: string;
-  feature_2_description?: string;
-  feature_3_title?: string;
-  feature_3_description?: string;
-  site_name?: string;
-  footer_address?: string;
-}
-
 interface Banner {
   id: string;
   title: string;
@@ -41,20 +38,20 @@ interface Banner {
 
 // ─── Category meta ────────────────────────────────────────────────────────────
 const CAT_ICONS: Record<string, string> = {
-  "همه":            "☕",
-  "اسپرسو":         "☕",
-  "قهوه دمی":       "🫖",
-  "نوشیدنی سرد":    "🧊",
-  "نوشیدنی خاص":    "🥤",
-  "کیک و دسر":      "🍰",
+  همه: "☕",
+  "نوشیدنی‌های گرم (Hot Beverages)": "☕",
+  "نوشیدنی‌های سرد (Cold Beverages)": "🧊",
+  "غذا و میان‌وعده (Food)": "🥪",
+  "دسر و شیرینی (Desserts)": "🍰",
+  "محصولات بسته‌بندی (Retail Products)": "📦",
 };
 
 // ─── Info blocks ──────────────────────────────────────────────────────────────
 const INFO_BLOCKS = [
-  { icon: Truck,       title: "تحویل سریع",         desc: "در کوتاه‌ترین زمان" },
-  { icon: Headphones,  title: "پشتیبانی ۲۴ ساعته",  desc: "همیشه در دسترس" },
-  { icon: Shield,      title: "ضمانت کیفیت",         desc: "بهترین دانه‌های قهوه" },
-  { icon: Clock,       title: "سرویس ۷ روزه",        desc: "همه روزه باز هستیم" },
+  { icon: Truck, title: "تحویل سریع", desc: "در کوتاه‌ترین زمان" },
+  { icon: Headphones, title: "پشتیبانی ۲۴ ساعته", desc: "همیشه در دسترس" },
+  { icon: Shield, title: "ضمانت کیفیت", desc: "بهترین دانه‌های قهوه" },
+  { icon: Clock, title: "سرویس ۷ روزه", desc: "همه روزه باز هستیم" }
 ];
 
 // ─── Hero image (fallback stock photo) ───────────────────────────────────────
@@ -64,49 +61,50 @@ const HERO_IMG =
 // ═════════════════════════════════════════════════════════════════════════════
 export default function Home() {
   const { isDark } = useContext(ThemeContext);
+  const { getSetting } = useSiteSettings();
 
-  const [settings, setSettings]               = useState<SiteSettings>({});
-  const [banners, setBanners]                 = useState<Banner[]>([]);
-  const [featuredItems, setFeaturedItems]     = useState<MenuItem[]>([]);
-  const [activeCategory, setActiveCategory]   = useState<string>("همه");
-  const [loading, setLoading]                 = useState(true);
-  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
-  const { toasts, addToast, removeToast }     = useToast();
-  const hasCheckedStatus                      = React.useRef(false);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [featuredItems, setFeaturedItems] = useState<MenuItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>("همه");
+  const [loading, setLoading] = useState(true);
+  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(
+    new Set()
+  );
+  const { warning } = useToast();
+  const hasCheckedStatus = React.useRef(false);
 
   // ── Toast: manually-closed cafe ───────────────────────────────────────────
   useEffect(() => {
     if (hasCheckedStatus.current) return;
-    fetch("/api/working-hours")
+    fetch("/api/working-hours", { method: "POST" })
       .then(r => r.json())
       .then(data => {
-        if (data.siteStatus?.is_manually_closed === 1) {
+        if (data.isOpen === false && data.manualClosure) {
           hasCheckedStatus.current = true;
-          const closedUntil = data.siteStatus.closed_until;
-          const reason      = data.siteStatus.reason || "";
-          if (closedUntil) {
-            const d    = new Date(closedUntil * 1000);
-            const date = d.toLocaleDateString("fa-IR");
-            const time = d.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
-            addToast(`کافه تا ${date} ساعت ${time} ${reason ? `(${reason})` : ""} بسته است.`, "warning", 10000);
+          const reason = data.reason || "";
+          const from = data.manualClosure.from;
+          const to = data.manualClosure.to;
+          if (to) {
+            warning(
+              `کافه به‌صورت دستی از ${from} تا ${to} بسته است${reason ? ` (${reason})` : ""}.`
+            );
           } else {
-            addToast(`کافه به صورت موقت بسته است. ${reason ? `(${reason})` : ""}`, "warning", 10000);
+            warning(
+              `کافه به‌صورت دستی از ${from} بسته است${reason ? ` (${reason})` : ""}.`
+            );
           }
         }
       })
       .catch(() => {});
   }, []);
 
-  // ── Fetch settings, banners, menu ─────────────────────────────────────────
+  // ── Fetch banners + menu (settings come from SiteSettingsContext) ──────────
   useEffect(() => {
     Promise.all([
-      fetch("/api/settings/public").then(r => r.json()),
       fetch("/api/banners?activeOnly=true").then(r => r.json()),
-      fetch("/api/menu").then(r => r.json()),
+      fetch("/api/menu").then(r => r.json())
     ])
-      .then(([sd, bd, md]) => {
-        if (sd.settings) setSettings(sd.settings);
-
+      .then(([bd, md]) => {
         if (bd.banners) {
           const now = Math.floor(Date.now() / 1000);
           setBanners(
@@ -123,9 +121,15 @@ export default function Home() {
 
         if (Array.isArray(md)) {
           const featured = md
-            .filter((i: MenuItem) => i.available && (i.is_pinned || i.is_suggested))
+            .filter(
+              (i: MenuItem) => i.available && (i.is_pinned || i.is_suggested)
+            )
             .slice(0, 8);
-          setFeaturedItems(featured.length ? featured : md.filter((i: MenuItem) => i.available).slice(0, 6));
+          setFeaturedItems(
+            featured.length
+              ? featured
+              : md.filter((i: MenuItem) => i.available).slice(0, 6)
+          );
         }
       })
       .catch(() => {})
@@ -138,48 +142,57 @@ export default function Home() {
       fetch("/api/stats", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "visit", data: { page: "home" } }),
+        body: JSON.stringify({ action: "visit", data: { page: "home" } })
       }).catch(() => {});
       sessionStorage.setItem("vaje_visited", "true");
     }
   }, []);
 
-  // ── Derived values ────────────────────────────────────────────────────────
-  const siteName   = settings.site_name   || "کافه واژه";
-  const heroTitle  = settings.hero_title  || "به کافه واژه خوش آمدید";
-  const heroSub    = settings.hero_subtitle || "طعم واقعی قهوه و لحظات ناب را\nدر محیطی آرام تجربه کنید.";
-  const address    = settings.footer_address || "اسدآباد - خیابان صاحب‌زمان شرقی - دور میدان نون و قلم";
+  // ── Derived values (from SiteSettingsContext) ─────────────────────────────
+  const siteName  = getSetting("site_name", "کافه واژه");
+  const heroTitle = getSetting("hero_title", "به کافه واژه خوش آمدید");
+  const heroSub   = getSetting("hero_subtitle", "طعم واقعی قهوه و لحظات ناب را\nدر محیطی آرام تجربه کنید.");
+  const address   = getSetting("footer_address", "اسدآباد - خیابان صاحب‌زمان شرقی - دور میدان نون و قلم");
   const activeBanner = banners.find(b => !dismissedBanners.has(b.id));
 
   // ── Category-filtered items ───────────────────────────────────────────────
-  const categoryItems = activeCategory === "همه"
-    ? featuredItems
-    : featuredItems.filter(i => i.category === activeCategory);
+  const categoryItems =
+    activeCategory === "همه"
+      ? featuredItems
+      : featuredItems.filter(i =>
+          menuItemMatchesCategory(i.category, activeCategory)
+        );
   const displayItems = categoryItems.length ? categoryItems : featuredItems;
 
   // ── Surface ───────────────────────────────────────────────────────────────
-  const bg      = isDark ? "bg-[#0f120e]"  : "bg-[#faf8f4]";
-  const surface = isDark ? "bg-[#181c17]"  : "bg-white";
-  const border  = isDark ? "border-[#2c3329]" : "border-[#e5e0d8]";
-  const text    = isDark ? "text-[#edf2eb]"   : "text-[#111814]";
-  const muted   = isDark ? "text-[#8fa688]"   : "text-[#4b5563]";
-  const mutedbg = isDark ? "bg-[#1f2520]"     : "bg-[#f0ece4]";
+  const bg = isDark ? "bg-[#0f120e]" : "bg-[#faf8f4]";
+  const surface = isDark ? "bg-[#181c17]" : "bg-white";
+  const border = isDark ? "border-[#2c3329]" : "border-[#e5e0d8]";
+  const text = isDark ? "text-[#edf2eb]" : "text-[#111814]";
+  const muted = isDark ? "text-[#8fa688]" : "text-[#4b5563]";
+  const mutedbg = isDark ? "bg-[#1f2520]" : "bg-[#f0ece4]";
 
   return (
     <div className={cn("flex flex-col min-h-screen", bg, text)} dir="rtl">
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
-
       {/* ── Announcement banner ──────────────────────────────────────────── */}
       {activeBanner && (
         <div className={cn("border-b", border, surface)}>
           <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center gap-3">
-            <span className={cn("w-1.5 h-1.5 rounded-full bg-[#186244] shrink-0")} />
+            <span
+              className={cn("w-1.5 h-1.5 rounded-full bg-[#186244] shrink-0")}
+            />
             <p className={cn("flex-1 text-sm leading-relaxed", muted)}>
               {activeBanner.title}
             </p>
             <button
-              onClick={() => setDismissedBanners(p => new Set([...p, activeBanner.id]))}
-              className={cn("p-1 rounded-md transition-colors", muted, "hover:text-current")}
+              onClick={() =>
+                setDismissedBanners(p => new Set([...p, activeBanner.id]))
+              }
+              className={cn(
+                "p-1 rounded-md transition-colors",
+                muted,
+                "hover:text-current"
+              )}
               aria-label="بستن"
             >
               <X size={14} />
@@ -188,11 +201,12 @@ export default function Home() {
         </div>
       )}
 
+      <CustomerStories isDark={isDark} />
+
       {/* ══════════════════════════════════════════════════════════════════════
           HERO — split layout
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="flex flex-col md:flex-row min-h-[82vh] md:min-h-[78vh]">
-
         {/* Text panel (right in RTL → renders second in DOM = LEFT visually)
             We put the image first in DOM so in RTL flex-row it ends up on the right */}
 
@@ -204,19 +218,23 @@ export default function Home() {
             className="w-full h-full object-cover"
           />
           {/* overlay */}
-          <div className={cn(
-            "absolute inset-0",
-            isDark
-              ? "bg-gradient-to-l from-[#0f120e] via-[#0f120e]/40 to-transparent"
-              : "bg-gradient-to-l from-[#faf8f4] via-[#faf8f4]/30 to-transparent"
-          )} />
+          <div
+            className={cn(
+              "absolute inset-0",
+              isDark
+                ? "bg-gradient-to-l from-[#0f120e] via-[#0f120e]/40 to-transparent"
+                : "bg-gradient-to-l from-[#faf8f4] via-[#faf8f4]/30 to-transparent"
+            )}
+          />
         </div>
 
         {/* ── Text (left side in RTL) ───────────────────────────────────── */}
-        <div className={cn(
-          "relative md:w-1/2 flex flex-col justify-center px-8 sm:px-12 md:px-16 py-16",
-          isDark ? "bg-[#0f120e]" : "bg-[#faf8f4]"
-        )}>
+        <div
+          className={cn(
+            "relative md:w-1/2 flex flex-col justify-center px-8 sm:px-12 md:px-16 py-16",
+            isDark ? "bg-[#0f120e]" : "bg-[#faf8f4]"
+          )}
+        >
           {/* brand label */}
           <p className="text-[#186244] text-sm font-semibold mb-4 tracking-wide">
             ✦ {siteName}
@@ -230,10 +248,20 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <h1 className={cn("text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-5", text)}>
+              <h1
+                className={cn(
+                  "text-3xl sm:text-4xl md:text-5xl font-black leading-tight mb-5",
+                  text
+                )}
+              >
                 {heroTitle}
               </h1>
-              <p className={cn("text-base md:text-lg leading-loose whitespace-pre-line mb-10", muted)}>
+              <p
+                className={cn(
+                  "text-base md:text-lg leading-loose whitespace-pre-line mb-10",
+                  muted
+                )}
+              >
                 {heroSub}
               </p>
             </>
@@ -266,7 +294,15 @@ export default function Home() {
       {/* ══════════════════════════════════════════════════════════════════════
           CATEGORY TABS
       ══════════════════════════════════════════════════════════════════════ */}
-      <section className={cn("sticky top-[4.5rem] sm:top-[5rem] z-30 border-b", border, isDark ? "bg-[#141a12]/95 backdrop-blur-xl" : "bg-white/95 backdrop-blur-xl")}>
+      <section
+        className={cn(
+          "sticky top-[4.5rem] sm:top-[5rem] z-30 border-b",
+          border,
+          isDark
+            ? "bg-[#141a12]/95 backdrop-blur-xl"
+            : "bg-white/95 backdrop-blur-xl"
+        )}
+      >
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide py-3">
             {/* "همه" tab */}
@@ -299,7 +335,12 @@ export default function Home() {
           {/* header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className={cn("text-xs font-semibold uppercase tracking-widest mb-1", "text-[#186244]")}>
+              <p
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-widest mb-1",
+                  "text-[#186244]"
+                )}
+              >
                 منتخب امروز
               </p>
               <h2 className={cn("text-xl sm:text-2xl font-bold", text)}>
@@ -324,7 +365,10 @@ export default function Home() {
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className={cn("shrink-0 w-48 sm:w-52 rounded-2xl animate-pulse", mutedbg)}
+                  className={cn(
+                    "shrink-0 w-48 sm:w-52 rounded-2xl animate-pulse",
+                    mutedbg
+                  )}
                   style={{ height: 260 }}
                 />
               ))}
@@ -354,15 +398,25 @@ export default function Home() {
       {/* ══════════════════════════════════════════════════════════════════════
           INFO BLOCKS
       ══════════════════════════════════════════════════════════════════════ */}
-      <section className={cn("border-t border-b py-8 md:py-10", border, isDark ? "bg-[#141a12]" : "bg-white")}>
+      <section
+        className={cn(
+          "border-t border-b py-8 md:py-10",
+          border,
+          isDark ? "bg-[#141a12]" : "bg-white"
+        )}
+      >
         <div className="max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {INFO_BLOCKS.map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
-                <div className={cn(
-                  "mt-0.5 w-9 h-9 shrink-0 rounded-xl flex items-center justify-center",
-                  isDark ? "bg-[#1f2520] text-[#4ade80]" : "bg-[#dcfce7] text-[#186244]"
-                )}>
+                <div
+                  className={cn(
+                    "mt-0.5 w-9 h-9 shrink-0 rounded-xl flex items-center justify-center",
+                    isDark
+                      ? "bg-[#1f2520] text-[#4ade80]"
+                      : "bg-[#dcfce7] text-[#186244]"
+                  )}
+                >
                   <Icon size={18} strokeWidth={1.8} />
                 </div>
                 <div>
@@ -384,21 +438,27 @@ export default function Home() {
       {/* ══════════════════════════════════════════════════════════════════════
           VISIT / CTA
       ══════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="visit"
-        className={cn("border-t py-14 md:py-20", border)}
-      >
+      <section id="visit" className={cn("border-t py-14 md:py-20", border)}>
         <div className="max-w-2xl mx-auto px-4 text-center">
-          <span className={cn(
-            "inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest mb-4",
-            isDark ? "bg-[#1f2520] text-[#4ade80]" : "bg-[#dcfce7] text-[#186244]"
-          )}>
+          <span
+            className={cn(
+              "inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest mb-4",
+              isDark
+                ? "bg-[#1f2520] text-[#4ade80]"
+                : "bg-[#dcfce7] text-[#186244]"
+            )}
+          >
             بیایید و بچشید
           </span>
           <h2 className={cn("text-2xl sm:text-3xl font-black mb-3", text)}>
             به ما سر بزنید
           </h2>
-          <p className={cn("text-sm md:text-base leading-loose whitespace-pre-line mb-8", muted)}>
+          <p
+            className={cn(
+              "text-sm md:text-base leading-loose whitespace-pre-line mb-8",
+              muted
+            )}
+          >
             {address}
           </p>
           <Link
@@ -417,10 +477,17 @@ export default function Home() {
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function CategoryTab({
-  label, icon, active, isDark, onClick,
+  label,
+  icon,
+  active,
+  isDark,
+  onClick
 }: {
-  label: string; icon: string; active: boolean;
-  isDark: boolean; onClick: () => void;
+  label: string;
+  icon: string;
+  active: boolean;
+  isDark: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
@@ -457,12 +524,20 @@ function StarRow({ rating }: { rating?: number }) {
 }
 
 function ProductCard({
-  item, surface, border, text,
+  item,
+  surface,
+  border,
+  text
 }: {
-  item: MenuItem; isDark: boolean;
-  surface: string; border: string; text: string; muted: string;
+  item: MenuItem;
+  isDark: boolean;
+  surface: string;
+  border: string;
+  text: string;
+  muted: string;
 }) {
-  const imgSrc = item.imageUrl || `https://picsum.photos/300/200?random=${item.id}`;
+  const imgSrc =
+    item.imageUrl || `https://picsum.photos/300/200?random=${item.id}`;
 
   return (
     <Link
@@ -470,7 +545,8 @@ function ProductCard({
       className={cn(
         "group shrink-0 w-44 sm:w-48 flex flex-col rounded-2xl border overflow-hidden transition-all duration-200",
         "hover:-translate-y-1 hover:shadow-lg",
-        surface, border
+        surface,
+        border
       )}
     >
       {/* image */}
@@ -480,7 +556,8 @@ function ProductCard({
           alt={item.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={e => {
-            (e.target as HTMLImageElement).src = `https://picsum.photos/300/200?random=${item.id}`;
+            (e.target as HTMLImageElement).src =
+              `https://picsum.photos/300/200?random=${item.id}`;
           }}
         />
         {item.is_pinned && (
@@ -497,7 +574,12 @@ function ProductCard({
 
       {/* info */}
       <div className="p-3 flex flex-col gap-1.5 flex-1">
-        <p className={cn("text-sm font-semibold leading-snug line-clamp-1", text)}>
+        <p
+          className={cn(
+            "text-sm font-semibold leading-snug line-clamp-1",
+            text
+          )}
+        >
           {item.name}
         </p>
         <StarRow />
@@ -508,9 +590,11 @@ function ProductCard({
 
       {/* add button */}
       <div className="px-3 pb-3">
-        <div className={cn(
-          "w-full flex items-center justify-center gap-1 rounded-full py-1.5 text-xs font-semibold text-white bg-[#186244] group-hover:bg-[#1f7a56] transition-colors"
-        )}>
+        <div
+          className={cn(
+            "w-full flex items-center justify-center gap-1 rounded-full py-1.5 text-xs font-semibold text-white bg-[#186244] group-hover:bg-[#1f7a56] transition-colors"
+          )}
+        >
           افزودن به سفارش
         </div>
       </div>

@@ -1,218 +1,99 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Users, UserPlus, TrendingUp, Star, DollarSign, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React from "react";
+import { Users, UserPlus, DollarSign, Star } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { timestampToJalaliString } from "@/utils/dateFormatter";
-import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
+import { useReportData, type DateRange } from "./useReportData";
+import { ReportLoadingState, ReportErrorState } from "./ReportStates";
+import { ReportSummaryCard, ReportSummaryGrid } from "./ReportSummaryCard";
+import { ReportTableShell, ReportTable, reportHeadClass, reportCellClass, reportRowClass } from "./ReportTableShell";
 
 interface CustomerReportProps {
-  dateRange: { from: string; to: string };
+  dateRange: DateRange;
   isDark?: boolean;
 }
 
 export default function CustomerReport({ dateRange, isDark = false }: CustomerReportProps) {
-  const [loading, setLoading] = useState(true);
-  const [reportData, setReportData] = useState<any>(null);
+  const { loading, error, data, refetch } = useReportData<any>("/api/reports/customers", dateRange);
 
-  useEffect(() => {
-    fetchReportData();
-  }, [dateRange]);
+  if (loading) return <ReportLoadingState isDark={isDark} />;
+  if (error) return <ReportErrorState message={error} onRetry={refetch} isDark={isDark} />;
+  if (!data) return null;
 
-  const fetchReportData = async () => {
-    try {
-      setLoading(true);
-      const startDate = dateRange.from ? jalaliToTimestamp(dateRange.from) : undefined;
-      const endDate = dateRange.to ? jalaliToTimestamp(dateRange.to) : undefined;
-
-      const params = new URLSearchParams();
-      if (startDate) params.append("startDate", startDate.toString());
-      if (endDate) params.append("endDate", endDate.toString());
-
-      const response = await fetch(`/api/reports/customers?${params.toString()}`, {
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setReportData(data);
-      }
-    } catch (error) {
-      console.error("Error fetching customer report:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <Loader2 className="animate-spin text-coffee-500 w-8 h-8" />
-      </div>
-    );
-  }
-
-  if (!reportData) {
-    return (
-      <div className={cn("text-center py-20", isDark ? "text-gray-400" : "text-gray-600")}>
-        خطا در دریافت گزارش
-      </div>
-    );
-  }
-
-  const { totals, segments, topCustomers } = reportData;
+  const { totals, segments, customers, topCustomers } = data;
+  const customerList = customers ?? topCustomers ?? [];
+  const head = reportHeadClass(isDark);
+  const cell = reportCellClass(isDark);
+  const row = reportRowClass(isDark);
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  کل مشتریان
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>
-                  {toPersianDigits((totals.totalCustomers || 0).toString())}
-                </p>
-              </div>
-              <Users size={32} className={cn(isDark ? "text-blue-400" : "text-blue-600")} />
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-4 sm:space-y-6" dir="rtl">
+      <ReportSummaryGrid>
+        <ReportSummaryCard label="کل مشتریان" value={toPersianDigits((totals.totalCustomers || 0).toString())} icon={Users} iconClassName={isDark ? "text-blue-400" : "text-blue-600"} isDark={isDark} />
+        <ReportSummaryCard label="مشتریان جدید" value={toPersianDigits((totals.newCustomers || 0).toString())} icon={UserPlus} iconClassName={isDark ? "text-green-400" : "text-green-600"} isDark={isDark} />
+        <ReportSummaryCard label="میانگین سفارش" value={formatToman(totals.avgOrderValue || 0)} icon={DollarSign} iconClassName={isDark ? "text-purple-400" : "text-purple-600"} isDark={isDark} />
+        <ReportSummaryCard label="مشتریان با امتیاز" value={toPersianDigits((totals.customersWithPoints || 0).toString())} icon={Star} iconClassName={isDark ? "text-yellow-400" : "text-yellow-600"} isDark={isDark} />
+      </ReportSummaryGrid>
 
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  مشتریان جدید
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>
-                  {toPersianDigits((totals.newCustomers || 0).toString())}
-                </p>
-              </div>
-              <UserPlus size={32} className={cn(isDark ? "text-green-400" : "text-green-600")} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  میانگین سفارش
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>
-                  {formatToman(totals.avgOrderValue || 0)}
-                </p>
-              </div>
-              <DollarSign size={32} className={cn(isDark ? "text-purple-400" : "text-purple-600")} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  مشتریان با امتیاز
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>
-                  {toPersianDigits((totals.customersWithPoints || 0).toString())}
-                </p>
-              </div>
-              <Star size={32} className={cn(isDark ? "text-yellow-400" : "text-yellow-600")} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Customer Segments */}
       {segments && (
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardHeader>
-            <CardTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
+        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200")} dir="rtl">
+          <CardHeader className="pb-3">
+            <CardTitle className={cn("text-base sm:text-lg", isDark ? "text-white" : "text-gray-900")}>
               تقسیم‌بندی مشتریان
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className={cn("p-4 rounded-lg", isDark ? "bg-purple-900/30 border border-purple-500/30" : "bg-purple-50 border border-purple-200")}>
-                <p className={cn("text-sm mb-2", isDark ? "text-purple-300" : "text-purple-700")}>
-                  مشتریان VIP
-                </p>
-                <p className={cn("text-3xl font-bold", isDark ? "text-purple-400" : "text-purple-600")}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className={cn("p-4 rounded-lg border", isDark ? "bg-purple-900/30 border-purple-500/30" : "bg-purple-50 border-purple-200")}>
+                <p className={cn("text-sm mb-1", isDark ? "text-purple-300" : "text-purple-700")}>VIP</p>
+                <p className={cn("text-2xl sm:text-3xl font-bold", isDark ? "text-purple-400" : "text-purple-600")}>
                   {toPersianDigits((segments.vip || 0).toString())}
                 </p>
-                <p className={cn("text-xs mt-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                  1 میلیون تومان و بالاتر
-                </p>
+                <p className={cn("text-xs mt-1", isDark ? "text-gray-500" : "text-gray-500")}>۱M+ تومان</p>
               </div>
-              <div className={cn("p-4 rounded-lg", isDark ? "bg-blue-900/30 border border-blue-500/30" : "bg-blue-50 border border-blue-200")}>
-                <p className={cn("text-sm mb-2", isDark ? "text-blue-300" : "text-blue-700")}>
-                  مشتریان عادی
-                </p>
-                <p className={cn("text-3xl font-bold", isDark ? "text-blue-400" : "text-blue-600")}>
+              <div className={cn("p-4 rounded-lg border", isDark ? "bg-blue-900/30 border-blue-500/30" : "bg-blue-50 border-blue-200")}>
+                <p className={cn("text-sm mb-1", isDark ? "text-blue-300" : "text-blue-700")}>عادی</p>
+                <p className={cn("text-2xl sm:text-3xl font-bold", isDark ? "text-blue-400" : "text-blue-600")}>
                   {toPersianDigits((segments.regular || 0).toString())}
                 </p>
-                <p className={cn("text-xs mt-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                  200 هزار تا 1 میلیون تومان
-                </p>
+                <p className={cn("text-xs mt-1", isDark ? "text-gray-500" : "text-gray-500")}>۲۰۰K – ۱M</p>
               </div>
-              <div className={cn("p-4 rounded-lg", isDark ? "bg-green-900/30 border border-green-500/30" : "bg-green-50 border border-green-200")}>
-                <p className={cn("text-sm mb-2", isDark ? "text-green-300" : "text-green-700")}>
-                  مشتریان جدید
-                </p>
-                <p className={cn("text-3xl font-bold", isDark ? "text-green-400" : "text-green-600")}>
+              <div className={cn("p-4 rounded-lg border", isDark ? "bg-green-900/30 border-green-500/30" : "bg-green-50 border-green-200")}>
+                <p className={cn("text-sm mb-1", isDark ? "text-green-300" : "text-green-700")}>جدید</p>
+                <p className={cn("text-2xl sm:text-3xl font-bold", isDark ? "text-green-400" : "text-green-600")}>
                   {toPersianDigits((segments.new || 0).toString())}
                 </p>
-                <p className={cn("text-xs mt-1", isDark ? "text-gray-400" : "text-gray-600")}>
-                  کمتر از 200 هزار تومان
-                </p>
+                <p className={cn("text-xs mt-1", isDark ? "text-gray-500" : "text-gray-500")}>زیر ۲۰۰K</p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Loyalty Points Summary */}
       {totals && (
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardHeader>
-            <CardTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
+        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200")} dir="rtl">
+          <CardHeader className="pb-3">
+            <CardTitle className={cn("text-base sm:text-lg", isDark ? "text-white" : "text-gray-900")}>
               خلاصه برنامه وفاداری
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  امتیازهای اعطا شده
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>
-                  {toPersianDigits((totals.totalPointsAwarded || 0).toString())}
-                </p>
+                <p className={cn("text-xs sm:text-sm", isDark ? "text-gray-400" : "text-gray-600")}>امتیازهای اعطا شده</p>
+                <p className={cn("text-xl sm:text-2xl font-bold mt-1", isDark ? "text-white" : "text-gray-900")}>{toPersianDigits((totals.totalPointsAwarded || 0).toString())}</p>
               </div>
               <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  امتیازهای استفاده شده
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-red-400" : "text-red-600")}>
-                  {toPersianDigits((totals.totalPointsRedeemed || 0).toString())}
-                </p>
+                <p className={cn("text-xs sm:text-sm", isDark ? "text-gray-400" : "text-gray-600")}>امتیازهای استفاده شده</p>
+                <p className={cn("text-xl sm:text-2xl font-bold mt-1", isDark ? "text-red-400" : "text-red-600")}>{toPersianDigits((totals.totalPointsRedeemed || 0).toString())}</p>
               </div>
               <div>
-                <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
-                  موجودی کل امتیازها
-                </p>
-                <p className={cn("text-2xl font-bold mt-1", isDark ? "text-green-400" : "text-green-600")}>
+                <p className={cn("text-xs sm:text-sm", isDark ? "text-gray-400" : "text-gray-600")}>موجودی کل امتیازها</p>
+                <p className={cn("text-xl sm:text-2xl font-bold mt-1", isDark ? "text-green-400" : "text-green-600")}>
                   {toPersianDigits(((totals.totalPointsAwarded || 0) - (totals.totalPointsRedeemed || 0)).toString())}
                 </p>
               </div>
@@ -221,64 +102,57 @@ export default function CustomerReport({ dateRange, isDark = false }: CustomerRe
         </Card>
       )}
 
-      {/* Top Customers */}
-      {topCustomers && topCustomers.length > 0 && (
-        <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-          <CardHeader>
-            <CardTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
-              برترین مشتریان
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className={isDark ? "border-white/10" : "border-gray-200"}>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>نام</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>شماره تماس</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>تعداد سفارشات</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>کل خرید</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>آخرین سفارش</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>امتیاز</TableHead>
+      {customerList.length > 0 && (
+        <ReportTableShell
+          title="لیست مشتریان"
+          subtitle={`${toPersianDigits(customerList.length.toString())} مشتری`}
+          isDark={isDark}
+        >
+          <ReportTable>
+            <Table>
+              <TableHeader>
+                <TableRow className={isDark ? "border-white/10 hover:bg-transparent" : "border-gray-200"}>
+                  <TableHead className={head}>نام</TableHead>
+                  <TableHead className={head}>تماس</TableHead>
+                  <TableHead className={head}>سفارشات دوره</TableHead>
+                  <TableHead className={head}>خرید دوره</TableHead>
+                  <TableHead className={head}>کل سفارشات</TableHead>
+                  <TableHead className={head}>کل خرید</TableHead>
+                  <TableHead className={head}>آخرین سفارش</TableHead>
+                  <TableHead className={head}>امتیاز</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customerList.map((customer: any) => (
+                  <TableRow key={customer.id} className={row}>
+                    <TableCell className={cn("font-medium whitespace-nowrap", isDark ? "text-white" : "text-gray-900")}>
+                      {customer.name || "بدون نام"}
+                    </TableCell>
+                    <TableCell className={cn(cell, "whitespace-nowrap")}>{customer.phone || "-"}</TableCell>
+                    <TableCell className={cell}>{toPersianDigits((customer.ordersInPeriod || 0).toString())}</TableCell>
+                    <TableCell className={cn("font-semibold whitespace-nowrap", isDark ? "text-green-400" : "text-green-600")}>
+                      {formatToman(customer.spentInPeriod || 0)}
+                    </TableCell>
+                    <TableCell className={cell}>{toPersianDigits((customer.totalOrders || 0).toString())}</TableCell>
+                    <TableCell className={cn("font-semibold whitespace-nowrap", isDark ? "text-green-400" : "text-green-600")}>
+                      {formatToman(customer.totalSpent || 0)}
+                    </TableCell>
+                    <TableCell className={cn(cell, "whitespace-nowrap text-xs")}>
+                      {customer.lastOrderDate ? timestampToJalaliString(customer.lastOrderDate as number) : "-"}
+                    </TableCell>
+                    <TableCell className={cell}>
+                      <span className="inline-flex items-center gap-1 flex-row-reverse">
+                        <Star size={13} className={cn("fill-current", isDark ? "text-yellow-400" : "text-yellow-500")} />
+                        {toPersianDigits((customer.loyalty_points_balance || 0).toString())}
+                      </span>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topCustomers.slice(0, 20).map((customer: any) => (
-                    <TableRow
-                      key={customer.id}
-                      className={isDark ? "border-white/5 hover:bg-neutral-800" : "border-gray-200 hover:bg-gray-50"}
-                    >
-                      <TableCell className={cn("font-medium", isDark ? "text-white" : "text-gray-900")}>
-                        {customer.name || "بدون نام"}
-                      </TableCell>
-                      <TableCell className={isDark ? "text-gray-300" : "text-gray-700"}>
-                        {customer.phone || "-"}
-                      </TableCell>
-                      <TableCell className={isDark ? "text-gray-300" : "text-gray-700"}>
-                        {toPersianDigits((customer.totalOrders || 0).toString())}
-                      </TableCell>
-                      <TableCell className={cn("font-semibold", isDark ? "text-green-400" : "text-green-600")}>
-                        {formatToman(customer.totalSpent || 0)}
-                      </TableCell>
-                      <TableCell className={isDark ? "text-gray-300" : "text-gray-700"}>
-                        {customer.lastOrderDate ? timestampToJalaliString(customer.lastOrderDate) : "-"}
-                      </TableCell>
-                      <TableCell className={isDark ? "text-gray-300" : "text-gray-700"}>
-                        <div className="flex items-center gap-1">
-                          <Star size={14} className={cn("fill-current", isDark ? "text-yellow-400" : "text-yellow-500")} />
-                          {toPersianDigits((customer.loyalty_points_balance || 0).toString())}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </ReportTable>
+        </ReportTableShell>
       )}
     </div>
   );
 }
-
-

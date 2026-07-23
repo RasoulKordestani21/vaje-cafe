@@ -108,6 +108,69 @@ export function deleteImage(fileName: string): boolean {
   }
 }
 
+/** Extract stored filename from a public upload URL */
+export function urlToFileName(url: string): string | null {
+  if (url.startsWith("/uploads/")) return url.slice("/uploads/".length);
+  if (url.startsWith("/api/assets/")) return url.slice("/api/assets/".length);
+  return null;
+}
+
+/** Delete a stored media file by its public URL */
+export function deleteMediaByUrl(url: string): boolean {
+  const fileName = urlToFileName(url);
+  if (!fileName) return false;
+  return deleteImage(fileName);
+}
+
+const VIDEO_MIMES = ["video/mp4", "video/webm", "video/quicktime"];
+const VIDEO_EXTS = [".mp4", ".webm", ".mov"];
+
+export function isVideoMime(mimetype: string): boolean {
+  return VIDEO_MIMES.includes(mimetype) || mimetype.startsWith("video/");
+}
+
+/**
+ * Validate video file
+ */
+export function validateVideo(buffer: Buffer, mimetype: string): boolean {
+  const maxSize = 50 * 1024 * 1024; // 50MB
+
+  if (!isVideoMime(mimetype)) {
+    throw new Error("فرمت ویدیو پشتیبانی نمی‌شود. MP4، WebM یا MOV مجاز است.");
+  }
+
+  if (buffer.length > maxSize) {
+    throw new Error("حجم ویدیو نباید بیشتر از ۵۰ مگابایت باشد.");
+  }
+
+  return true;
+}
+
+/**
+ * Save video file as-is (no transcoding)
+ */
+export async function saveVideo(
+  buffer: Buffer,
+  originalFileName: string
+): Promise<{ fileName: string; url: string }> {
+  let ext = path.extname(originalFileName).toLowerCase();
+  if (!VIDEO_EXTS.includes(ext)) {
+    ext = ".mp4";
+  }
+  const random = crypto.randomBytes(8).toString("hex");
+  const outFileName = `video-${random}${ext}`;
+  const filePath = path.join(uploadDir, outFileName);
+
+  fs.writeFileSync(filePath, buffer);
+
+  let url = `/uploads/${outFileName}`;
+  if (externalAssetsDir) {
+    url = `/api/assets/${outFileName}`;
+  }
+
+  return { fileName: outFileName, url };
+}
+
 /**
  * Validate image file
  */

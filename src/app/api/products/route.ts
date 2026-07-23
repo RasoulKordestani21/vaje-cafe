@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import * as productsService from "@/services/productsService";
-
+import { resolveCategoryFields } from "@/services/categoriesService";
 // GET all products
 export async function GET(request: NextRequest) {
   try {
@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
 // POST create new product
 export async function POST(request: NextRequest) {
   try {
-    const authErr = ensureAdmin(request);
-    if (authErr) return authErr;
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
 
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       name,
       type,
       category,
+      categoryGroup,
       unit,
       currentStock,
       minStock,
@@ -44,6 +45,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const resolved = resolveCategoryFields({ categoryGroup, category });
+    if (!resolved) {
+      return NextResponse.json(
+        { error: "دسته‌بندی انتخاب‌شده معتبر نیست" },
+        { status: 400 }
+      );
+    }
+
     if (type !== "raw_material" && type !== "packed_product") {
       return NextResponse.json(
         { error: "Type must be 'raw_material' or 'packed_product'" },
@@ -54,7 +63,8 @@ export async function POST(request: NextRequest) {
     const product = productsService.createProduct({
       name,
       type,
-      category,
+      category: resolved.category,
+      categoryGroup: resolved.categoryGroup,
       unit,
       currentStock: currentStock || 0,
       minStock: minStock || 0,

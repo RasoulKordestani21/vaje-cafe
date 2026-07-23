@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import * as productsService from "@/services/productsService";
 
 /**
@@ -11,15 +11,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const ingredients = productsService.getMenuIngredients(params.id);
 
@@ -57,15 +50,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
 
@@ -127,15 +113,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const ingredientId = searchParams.get("ingredientId");

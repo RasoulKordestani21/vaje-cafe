@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import * as rawMaterialsService from "@/services/rawMaterialsService";
 
 /**
@@ -9,15 +9,8 @@ import * as rawMaterialsService from "@/services/rawMaterialsService";
  */
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get("startDate");
@@ -47,15 +40,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
 

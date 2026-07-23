@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
-import { compressAndSaveImage, validateImage } from "@/lib/imageService";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { compressAndSaveImage, validateImage, saveVideo, validateVideo, isVideoMime } from "@/lib/imageService";
 import crypto from "crypto";
 
 // GET photos for a gallery
@@ -39,21 +39,21 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
     const formData = await request.formData();
     
-    const imageFile = formData.get('image') as File | null;
-    const caption = formData.get('caption') as string;
-    const display_order = formData.get('display_order') as string;
+    const mediaFile = (formData.get("media") ?? formData.get("image")) as File | null;
+    const caption = formData.get("caption") as string;
+    const display_order = formData.get("display_order") as string;
 
-    if (!imageFile || imageFile.size === 0) {
+    if (!mediaFile || mediaFile.size === 0) {
       return NextResponse.json(
-        { error: "فایل تصویر الزامی است" },
+        { error: "فایل تصویر یا ویدیو الزامی است" },
         { status: 400 }
       );
     }
@@ -67,14 +67,25 @@ export async function POST(
       );
     }
 
-    // Handle image upload
-    const buffer = Buffer.from(await imageFile.arrayBuffer());
-    validateImage(buffer, imageFile.type);
-    const { url: image_url } = await compressAndSaveImage(buffer, imageFile.name, {
-      width: 1200,
-      height: 1200,
-      quality: 85
-    });
+    const buffer = Buffer.from(await mediaFile.arrayBuffer());
+    const isVideo = isVideoMime(mediaFile.type);
+    let image_url: string;
+    let media_type: "image" | "video" = "image";
+
+    if (isVideo) {
+      validateVideo(buffer, mediaFile.type);
+      const saved = await saveVideo(buffer, mediaFile.name);
+      image_url = saved.url;
+      media_type = "video";
+    } else {
+      validateImage(buffer, mediaFile.type);
+      const saved = await compressAndSaveImage(buffer, mediaFile.name, {
+        width: 1200,
+        height: 1200,
+        quality: 85,
+      });
+      image_url = saved.url;
+    }
 
     const photoId = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
@@ -89,9 +100,9 @@ export async function POST(
     }
 
     db.prepare(`
-      INSERT INTO photos (id, gallery_id, image_url, caption, display_order, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(photoId, id, image_url, caption || null, order, now);
+      INSERT INTO photos (id, gallery_id, image_url, caption, display_order, media_type, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(photoId, id, image_url, caption || null, order, media_type, now);
 
     const newPhoto = db.prepare("SELECT * FROM photos WHERE id = ?").get(photoId) as any;
 

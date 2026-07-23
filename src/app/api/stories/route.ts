@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import { compressAndSaveImage, validateImage } from "@/lib/imageService";
 import crypto from "crypto";
 
@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
 
 // POST create new story (admin only)
 export async function POST(request: NextRequest) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();

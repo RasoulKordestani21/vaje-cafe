@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 
 // GET all rewards (public - active only, or admin - all)
 export async function GET(request: NextRequest) {
@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
     const activeOnly = searchParams.get("active_only") !== "false"; // Default true
 
     // Check if admin (for management)
-    const sessionAuth = validateSession(request);
-    const isAdmin = sessionAuth.user && !sessionAuth.error;
+    const auth = requireAdminAccess(request);
+    const isAdmin = auth.authorized;
 
     let query = `
       SELECT * FROM loyalty_rewards
@@ -48,14 +48,8 @@ export async function GET(request: NextRequest) {
 // POST create new reward (admin only)
 export async function POST(request: NextRequest) {
   try {
-    const sessionAuth = validateSession(request);
-    
-    if (!sessionAuth.user || sessionAuth.error) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const body = await request.json();

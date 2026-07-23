@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDatabase, formatTimestamp } from "@/lib/database";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { getInventoryLogs } from "@/services/productsService";
 
-// GET inventory logs for a product
+// GET inventory logs for a product (legacy route — prefer /inventory)
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const db = getDatabase();
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
+
     const { id } = await Promise.resolve(params);
+    const filter = request.nextUrl.searchParams.get("filter");
+    const tab =
+      filter === "buy" || filter === "sell" ? filter : ("all" as const);
 
-    const logs = db
-      .prepare(`
-        SELECT * FROM inventory_logs 
-        WHERE productId = ?
-        ORDER BY createdAt DESC
-        LIMIT 100
-      `)
-      .all(id);
-
+    const logs = getInventoryLogs(id, tab);
     return NextResponse.json(logs);
   } catch (error) {
     console.error("Inventory logs GET error:", error);
@@ -28,4 +26,3 @@ export async function GET(
     );
   }
 }
-

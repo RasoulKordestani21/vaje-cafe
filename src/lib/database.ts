@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { findGroupForSubcategory } from "@/constants/inventoryCategories";
 
 // Allow placing DB outside of project using env var `EXTERNAL_DB_PATH`.
 // Example (sibling folder): ../vaje-cafe-data/vaje-cafe.db
@@ -111,14 +112,46 @@ export function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS order_items (
       id TEXT PRIMARY KEY,
       orderId TEXT NOT NULL,
-      menuItemId TEXT NOT NULL,
+      menuItemId TEXT,
       name TEXT NOT NULL,
       price INTEGER NOT NULL,
       quantity INTEGER NOT NULL,
       FOREIGN KEY (orderId) REFERENCES orders(id) ON DELETE CASCADE,
-      FOREIGN KEY (menuItemId) REFERENCES menu_items(id)
+      FOREIGN KEY (menuItemId) REFERENCES menu_items(id) ON DELETE SET NULL
     )
   `);
+
+  // Migration: order_items — preserve order lines when a menu item is deleted
+  try {
+    const tableSql = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='order_items'")
+      .get() as { sql?: string } | undefined;
+
+    if (tableSql?.sql && !tableSql.sql.includes("ON DELETE SET NULL")) {
+      console.log("Migrating order_items: ON DELETE SET NULL for menuItemId");
+      db.exec(`
+        CREATE TABLE order_items_migrated (
+          id TEXT PRIMARY KEY,
+          orderId TEXT NOT NULL,
+          menuItemId TEXT,
+          name TEXT NOT NULL,
+          price INTEGER NOT NULL,
+          quantity INTEGER NOT NULL,
+          FOREIGN KEY (orderId) REFERENCES orders(id) ON DELETE CASCADE,
+          FOREIGN KEY (menuItemId) REFERENCES menu_items(id) ON DELETE SET NULL
+        )
+      `);
+      db.exec(`
+        INSERT INTO order_items_migrated (id, orderId, menuItemId, name, price, quantity)
+        SELECT id, orderId, menuItemId, name, price, quantity FROM order_items
+      `);
+      db.exec(`DROP TABLE order_items`);
+      db.exec(`ALTER TABLE order_items_migrated RENAME TO order_items`);
+      console.log("✅ order_items table migrated for menu item deletion");
+    }
+  } catch (e) {
+    console.warn("Could not migrate order_items table for menu deletion", e);
+  }
 
   // Customers Table
   db.exec(`
@@ -273,6 +306,7 @@ export function initializeDatabase() {
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('raw_material', 'packed_product')),
       category TEXT NOT NULL,
+      categoryGroup TEXT,
       unit TEXT NOT NULL,
       currentStock REAL DEFAULT 0,
       minStock REAL DEFAULT 0,
@@ -304,10 +338,12 @@ export function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS inventory_logs (
       id TEXT PRIMARY KEY,
       productId TEXT NOT NULL,
-      changeType TEXT NOT NULL CHECK(changeType IN ('order_consumed', 'manual_add', 'manual_remove', 'restock', 'adjustment')),
+      changeType TEXT NOT NULL,
       quantity REAL NOT NULL,
       previousStock REAL NOT NULL,
       newStock REAL NOT NULL,
+      unitPrice REAL,
+      totalPrice REAL,
       orderId TEXT,
       note TEXT,
       createdAt INTEGER DEFAULT (strftime('%s', 'now')),
@@ -463,6 +499,86 @@ export function initializeDatabase() {
     }
   } catch (e) {
     console.warn("Could not migrate menu_ingredients table", e);
+  }
+
+  // Migration: inventory_logs — add price columns and relax changeType constraint
+  try {
+    const logColumns = db.pragma("table_info(inventory_logs)") as Array<{ name: string }>;
+    if (logColumns.length > 0) {
+      const hasUnitPrice = logColumns.some(col => col.name === "unitPrice");
+      if (!hasUnitPrice) {
+        db.exec(`ALTER TABLE inventory_logs ADD COLUMN unitPrice REAL`);
+        db.exec(`ALTER TABLE inventory_logs ADD COLUMN totalPrice REAL`);
+        console.log("✅ Added unitPrice/totalPrice to inventory_logs");
+      }
+
+      const tableSql = db
+        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='inventory_logs'")
+        .get() as { sql?: string } | undefined;
+
+      if (tableSql?.sql?.includes("CHECK")) {
+        db.exec(`
+          CREATE TABLE inventory_logs_migrated (
+            id TEXT PRIMARY KEY,
+            productId TEXT NOT NULL,
+            changeType TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            previousStock REAL NOT NULL,
+            newStock REAL NOT NULL,
+            unitPrice REAL,
+            totalPrice REAL,
+            orderId TEXT,
+            note TEXT,
+            createdAt INTEGER DEFAULT (strftime('%s', 'now')),
+            FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
+            FOREIGN KEY (orderId) REFERENCES orders(id) ON DELETE SET NULL
+          )
+        `);
+        db.exec(`
+          INSERT INTO inventory_logs_migrated (
+            id, productId, changeType, quantity, previousStock, newStock,
+            unitPrice, totalPrice, orderId, note, createdAt
+          )
+          SELECT
+            id, productId, changeType, quantity, previousStock, newStock,
+            unitPrice, totalPrice, orderId, note, createdAt
+          FROM inventory_logs
+        `);
+        db.exec(`DROP TABLE inventory_logs`);
+        db.exec(`ALTER TABLE inventory_logs_migrated RENAME TO inventory_logs`);
+        console.log("✅ inventory_logs table migrated (buy/sell/update support)");
+      }
+    }
+  } catch (e) {
+    console.warn("Could not migrate inventory_logs table", e);
+  }
+
+  // Migration: products.categoryGroup for hierarchical inventory categories
+  try {
+    const productColumns = db.pragma("table_info(products)") as Array<{ name: string }>;
+    if (productColumns.length > 0) {
+      const hasCategoryGroup = productColumns.some(col => col.name === "categoryGroup");
+      if (!hasCategoryGroup) {
+        db.exec(`ALTER TABLE products ADD COLUMN categoryGroup TEXT`);
+        console.log("✅ Added categoryGroup column to products");
+      }
+
+      // Backfill categoryGroup from subcategory name when possible
+      const rows = db
+        .prepare("SELECT id, category, categoryGroup FROM products WHERE categoryGroup IS NULL OR categoryGroup = ''")
+        .all() as Array<{ id: string; category: string; categoryGroup: string | null }>;
+
+      const updateStmt = db.prepare("UPDATE products SET categoryGroup = ? WHERE id = ?");
+      for (const row of rows) {
+        const group = findGroupForSubcategory(row.category);
+        if (group) updateStmt.run(group, row.id);
+      }
+      if (rows.length > 0) {
+        console.log(`✅ Backfilled categoryGroup for products where subcategory matched`);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not migrate products categoryGroup column", e);
   }
 
   // Migration: Add branchId to orders table if it doesn't exist
@@ -641,6 +757,18 @@ export function initializeDatabase() {
     }
   } catch (e) {
     console.warn("Could not create default working hours", e);
+  }
+
+  // Migration: add closed_from to site_status
+  try {
+    const statusColumns = db.prepare("PRAGMA table_info(site_status)").all() as Array<{ name: string }>;
+    const statusColumnNames = statusColumns.map((col) => col.name.toLowerCase());
+    if (!statusColumnNames.includes("closed_from")) {
+      db.exec(`ALTER TABLE site_status ADD COLUMN closed_from INTEGER`);
+      console.log("✅ Added closed_from column to site_status");
+    }
+  } catch (e) {
+    console.warn("Could not migrate site_status table for closed_from", e);
   }
 
   // Initialize site status if empty
@@ -998,6 +1126,18 @@ export function initializeDatabase() {
   `);
 
   console.log("✅ Created photo_galleries and photos tables");
+
+  // Migration: add media_type to photos (image | video)
+  try {
+    const photoColumns = db.pragma("table_info(photos)") as Array<{ name: string }>;
+    const photoColumnNames = photoColumns.map(col => col.name.toLowerCase());
+    if (!photoColumnNames.includes("media_type")) {
+      db.exec(`ALTER TABLE photos ADD COLUMN media_type TEXT DEFAULT 'image'`);
+      console.log("✅ Added media_type column to photos");
+    }
+  } catch (e) {
+    console.warn("Could not migrate photos table for media_type", e);
+  }
 
   // Stories Table (Instagram-like stories)
   db.exec(`

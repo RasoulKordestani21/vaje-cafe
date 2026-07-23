@@ -1,127 +1,95 @@
 /**
- * Raw Material Categories Service
- * Handles CRUD operations for raw material categories
+ * Inventory Categories Service
+ * Source of truth: src/constants/inventoryCategories.ts
  */
 
-import { getAuthDb } from "@/lib/authDb";
-import { v4 as uuid } from "uuid";
+import {
+  INVENTORY_CATEGORY_TREE,
+  findGroupForSubcategory,
+  formatInventoryCategory,
+  getInventoryCategoryGroups,
+  getSubcategoriesForGroup,
+  isValidInventoryCategory,
+  type InventoryCategoryGroup,
+} from "@/constants/inventoryCategories";
 
 export interface Category {
   id: string;
   name: string;
+  group: string;
   description?: string;
   color?: string;
-  createdAt: number;
-  updatedAt: number;
 }
 
-/**
- * Get all categories
- */
+export interface CategoryTreeNode extends InventoryCategoryGroup {}
+
+export function getCategoryTree(): CategoryTreeNode[] {
+  return INVENTORY_CATEGORY_TREE;
+}
+
 export function getCategories(): Category[] {
-  const db = getAuthDb();
-  const stmt = db.prepare(`
-    SELECT 
-      id,
-      name,
-      description,
-      color,
-      created_at as createdAt,
-      updated_at as updatedAt
-    FROM raw_material_categories
-    ORDER BY name
-  `);
-
-  return stmt.all() as Category[];
+  return INVENTORY_CATEGORY_TREE.flatMap(item =>
+    item.subcategories.map(sub => ({
+      id: `${item.group}::${sub}`,
+      name: sub,
+      group: item.group,
+    }))
+  );
 }
 
-/**
- * Get single category
- */
 export function getCategory(id: string): Category | undefined {
-  const db = getAuthDb();
-  const stmt = db.prepare(`
-    SELECT 
-      id,
-      name,
-      description,
-      color,
-      created_at as createdAt,
-      updated_at as updatedAt
-    FROM raw_material_categories
-    WHERE id = ?
-  `);
-
-  return stmt.get(id) as Category | undefined;
+  return getCategories().find(cat => cat.id === id);
 }
 
-/**
- * Create category
- */
-export function createCategory(
-  name: string,
-  description?: string,
-  color?: string
-): Category {
-  const db = getAuthDb();
-  const id = uuid();
-  const now = Date.now();
-
-  const stmt = db.prepare(`
-    INSERT INTO raw_material_categories (
-      id, name, description, color, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(
-    id,
-    name,
-    description || null,
-    color || "#888888",
-    now,
-    now
-  );
-
-  return getCategory(id)!;
+export function getCategoryGroups(): string[] {
+  return getInventoryCategoryGroups();
 }
 
-/**
- * Update category
- */
-export function updateCategory(
-  id: string,
-  updates: Partial<Omit<Category, "id" | "createdAt" | "updatedAt">>
-): Category {
-  const db = getAuthDb();
-  const now = Date.now();
-
-  const stmt = db.prepare(`
-    UPDATE raw_material_categories 
-    SET 
-      name = COALESCE(?, name),
-      description = COALESCE(?, description),
-      color = COALESCE(?, color),
-      updated_at = ?
-    WHERE id = ?
-  `);
-
-  stmt.run(
-    updates.name ?? null,
-    updates.description ?? null,
-    updates.color ?? null,
-    now,
-    id
-  );
-
-  return getCategory(id)!;
+export function getSubcategories(group: string): string[] {
+  return getSubcategoriesForGroup(group);
 }
 
-/**
- * Delete category
- */
-export function deleteCategory(id: string): boolean {
-  const db = getAuthDb();
-  const stmt = db.prepare("DELETE FROM raw_material_categories WHERE id = ?");
-  const result = stmt.run(id);
-  return result.changes > 0;
+export function validateCategoryPair(
+  group: string,
+  subcategory: string
+): boolean {
+  return isValidInventoryCategory(group, subcategory);
+}
+
+export function resolveCategoryFields(input: {
+  categoryGroup?: string | null;
+  category?: string | null;
+}): { categoryGroup: string; category: string } | null {
+  const group = input.categoryGroup?.trim();
+  const sub = input.category?.trim();
+  if (group && sub && isValidInventoryCategory(group, sub)) {
+    return { categoryGroup: group, category: sub };
+  }
+  if (sub && !group) {
+    const inferred = findGroupForSubcategory(sub);
+    if (inferred) return { categoryGroup: inferred, category: sub };
+  }
+  return null;
+}
+
+export function formatCategoryLabel(
+  group?: string | null,
+  sub?: string | null
+): string {
+  return formatInventoryCategory(group, sub);
+}
+
+/** @deprecated Categories are managed centrally — use constants file */
+export function createCategory(): never {
+  throw new Error("دسته‌بندی‌ها از طریق تنظیمات سیستم مدیریت می‌شوند");
+}
+
+/** @deprecated Categories are managed centrally */
+export function updateCategory(): never {
+  throw new Error("دسته‌بندی‌ها از طریق تنظیمات سیستم مدیریت می‌شوند");
+}
+
+/** @deprecated Categories are managed centrally */
+export function deleteCategory(): boolean {
+  return false;
 }

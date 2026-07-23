@@ -5,6 +5,7 @@ import { Trash2, Plus, Edit, AlertTriangle, DollarSign, TrendingUp, Loader2, Cal
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PriceInput } from "@/components/ui/PriceInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -12,7 +13,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -26,7 +27,16 @@ import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { timestampToJalaliString } from "@/utils/dateFormatter";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
-import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
+import { formatJalaliDate } from "@/utils/jalaliDateUtils";
+import { REPORT_DATE_PRESETS, presetRangeDays, resolveReportRange } from "@/lib/reports/dateRange";
+import { adminFetchInit } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import {
+  resolveWasteCostPerUnit,
+  wasteCostPerUnitHint,
+  calcWasteTotal,
+} from "@/lib/waste/unitCost";
 
 interface WasteRecord {
   id: string;
@@ -75,13 +85,17 @@ const wasteTypeColors: Record<string, string> = {
 };
 
 export default function WasteManager({ isDark = false }: WasteManagerProps) {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [wasteRecords, setWasteRecords] = useState<WasteRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<WasteRecord | null>(null);
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [selectedWasteType, setSelectedWasteType] = useState<string>("all");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     product_id: "",
@@ -108,10 +122,9 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch("/api/products", { credentials: "include" });
+      const response = await fetch("/api/products", adminFetchInit());
       if (response.ok) {
         const data = await response.json();
-        // productsService returns array directly or object with products property
         const productsList = Array.isArray(data) ? data : (data.products || []);
         setProducts(productsList);
       }
@@ -123,17 +136,14 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
   const fetchWasteRecords = async () => {
     try {
       setLoading(true);
-      const startDate = dateRange.from ? jalaliToTimestamp(dateRange.from) : undefined;
-      const endDate = dateRange.to ? jalaliToTimestamp(dateRange.to) : undefined;
+      const { start, end } = resolveReportRange(dateRange.from, dateRange.to);
 
       const params = new URLSearchParams();
-      if (startDate) params.append("startDate", startDate.toString());
-      if (endDate) params.append("endDate", endDate.toString());
+      params.append("startDate", start.toString());
+      params.append("endDate", end.toString());
       if (selectedWasteType !== "all") params.append("wasteType", selectedWasteType);
 
-      const response = await fetch(`/api/waste?${params.toString()}`, {
-        credentials: "include",
-      });
+      const response = await fetch(`/api/waste?${params.toString()}`, adminFetchInit());
 
       if (response.ok) {
         const data = await response.json();
@@ -148,9 +158,44 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
     }
   };
 
+  const applyPreset = (presetId: string, days: number) => {
+    const range = presetRangeDays(days);
+    setDateRange(range);
+    setActivePreset(presetId);
+  };
+
+  const handleDateChange = (field: "from" | "to", value: string) => {
+    setDateRange(prev => ({ ...prev, [field]: value }));
+    setActivePreset(null);
+  };
+
+  const handleResetFilters = () => {
+    setDateRange({ from: "", to: "" });
+    setActivePreset(null);
+    setSelectedWasteType("all");
+  };
+
+  const rangeLabel = () => {
+    if (!dateRange.from && !dateRange.to) return "۳۰ روز گذشته (پیش‌فرض)";
+    const from = dateRange.from ? toPersianDigits(formatJalaliDate(dateRange.from)) : "—";
+    const to = dateRange.to ? toPersianDigits(formatJalaliDate(dateRange.to)) : "امروز";
+    return `${from} تا ${to}`;
+  };
+
+  const labelClass = cn("block mb-1.5 text-sm", isDark ? "text-gray-300" : "text-gray-700");
+  const inputClass = cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white");
+  const selectTriggerClass = cn(
+    "text-right dir-rtl w-full justify-between flex-row-reverse",
+    isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white"
+  );
+
   const handleOpenDialog = (record?: WasteRecord) => {
     if (record) {
       setEditingRecord(record);
+      const linkedProduct = record.product_id
+        ? products.find(p => p.id === record.product_id) || null
+        : null;
+      setSelectedProduct(linkedProduct);
       setFormData({
         product_id: record.product_id || "",
         product_name: record.product_name,
@@ -163,6 +208,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
       });
     } else {
       setEditingRecord(null);
+      setSelectedProduct(null);
       setFormData({
         product_id: "",
         product_name: "",
@@ -180,6 +226,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingRecord(null);
+    setSelectedProduct(null);
     setFormData({
       product_id: "",
       product_name: "",
@@ -195,16 +242,23 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
   const handleProductSelect = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (product) {
+      const costPerUnit = resolveWasteCostPerUnit(product);
+      setSelectedProduct(product);
       setFormData(prev => ({
         ...prev,
         product_id: product.id,
         product_name: product.name,
-        category: product.category,
+        category: product.categoryGroup
+          ? `${product.categoryGroup} › ${product.category}`
+          : product.category,
         unit: product.unit,
-        cost_per_unit: product.price.toString(),
+        cost_per_unit: costPerUnit ? String(Math.round(costPerUnit * 100) / 100) : "",
       }));
     }
   };
+
+  const previewTotal = calcWasteTotal(formData.quantity, formData.cost_per_unit);
+  const costHint = selectedProduct ? wasteCostPerUnitHint(selectedProduct) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,43 +281,52 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
+        ...adminFetchInit({
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
       });
 
       if (response.ok) {
         await fetchWasteRecords();
         handleCloseDialog();
+        success(editingRecord ? "ثبت ضایعات با موفقیت ویرایش شد" : "ثبت ضایعات با موفقیت ذخیره شد");
       } else {
         const error = await response.json();
-        alert(error.error || "خطا در ذخیره ثبت ضایعات");
+        showError(error.error || "خطا در ذخیره ثبت ضایعات");
       }
     } catch (error) {
       console.error("Error saving waste record:", error);
-      alert("خطا در ذخیره ثبت ضایعات");
+      showError("خطا در ذخیره ثبت ضایعات");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا از حذف این ثبت ضایعات مطمئن هستید؟")) return;
+    const ok = await confirm({
+      title: "حذف ضایعات",
+      message: "آیا از حذف این ثبت ضایعات مطمئن هستید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/waste/${id}`, {
         method: "DELETE",
-        credentials: "include",
+        ...adminFetchInit(),
       });
 
       if (response.ok) {
         await fetchWasteRecords();
+        success("ثبت ضایعات با موفقیت حذف شد");
       } else {
-        alert("خطا در حذف ثبت ضایعات");
+        showError("خطا در حذف ثبت ضایعات");
       }
     } catch (error) {
       console.error("Error deleting waste record:", error);
-      alert("خطا در حذف ثبت ضایعات");
+      showError("خطا در حذف ثبت ضایعات");
     }
   };
 
@@ -276,9 +339,9 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className={cn("text-2xl font-bold", isDark ? "text-white" : "text-gray-900")}>
             مدیریت ضایعات
@@ -287,236 +350,264 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
             ثبت و پیگیری ضایعات مواد اولیه
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => handleOpenDialog()}
-              className="bg-coffee-600 hover:bg-coffee-700 text-white"
-            >
-              <Plus className="mr-2" size={16} />
-              ثبت ضایعات جدید
-            </Button>
-          </DialogTrigger>
-          <DialogContent className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-            <DialogHeader>
-              <DialogTitle className={cn(isDark ? "text-white" : "text-gray-900")}>
-                {editingRecord ? "ویرایش ثبت ضایعات" : "ثبت ضایعات جدید"}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Product Selection */}
+        <Button
+          onClick={() => handleOpenDialog()}
+          className="bg-coffee-600 hover:bg-coffee-700 text-white shrink-0"
+        >
+          <Plus className="ml-2" size={16} />
+          ثبت ضایعات جدید
+        </Button>
+      </div>
+
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={open => {
+          if (!open) handleCloseDialog();
+          else setIsDialogOpen(true);
+        }}
+      >
+        <DialogContent
+          className={cn(
+            "max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden",
+            isDark ? "bg-neutral-900 border-neutral-800" : "bg-white"
+          )}
+          dir="rtl"
+        >
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0 text-center items-center ps-12">
+            <DialogTitle className={cn("text-center w-full text-base font-bold", isDark ? "text-white" : "text-gray-900")}>
+              {editingRecord ? "ویرایش ثبت ضایعات" : "ثبت ضایعات جدید"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form
+            id="waste-form"
+            onSubmit={handleSubmit}
+            className="flex flex-col flex-1 min-h-0 overflow-hidden"
+          >
+            <div className="overflow-y-auto px-6 py-5 space-y-4 flex-1">
               <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                  محصول (اختیاری - برای جستجو انتخاب کنید)
+                <Label className={labelClass}>
+                  محصول (اختیاری — برای جستجو انتخاب کنید)
                 </Label>
                 <Select
-                  value={formData.product_id}
+                  value={formData.product_id || undefined}
                   onValueChange={handleProductSelect}
                 >
-                  <SelectTrigger className={cn(
-                    isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white"
-                  )}>
+                  <SelectTrigger className={selectTriggerClass} dir="rtl">
                     <SelectValue placeholder="انتخاب محصول..." />
                   </SelectTrigger>
-                  <SelectContent className={cn(isDark ? "bg-neutral-800" : "bg-white")}>
+                  <SelectContent className={cn("max-h-60", isDark ? "bg-neutral-800" : "bg-white")} dir="rtl">
                     {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} ({product.unit}) - موجودی: {toPersianDigits(product.currentStock.toString())}
+                      <SelectItem key={product.id} value={product.id} className="text-right">
+                        {product.name} ({product.unit}) — موجودی: {toPersianDigits(product.currentStock.toString())}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Product Name */}
               <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                  نام محصول *
-                </Label>
+                <Label className={labelClass}>نام محصول *</Label>
                 <Input
                   value={formData.product_name}
                   onChange={(e) => setFormData(prev => ({ ...prev, product_name: e.target.value }))}
                   required
-                  className={cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white")}
+                  className={inputClass}
                 />
               </div>
 
-              {/* Waste Type */}
               <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                  نوع ضایعات *
-                </Label>
+                <Label className={labelClass}>نوع ضایعات *</Label>
                 <Select
                   value={formData.waste_type}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, waste_type: value as any }))}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, waste_type: value as WasteRecord["waste_type"] }))}
                 >
-                  <SelectTrigger className={cn(
-                    isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white"
-                  )}>
+                  <SelectTrigger className={selectTriggerClass} dir="rtl">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className={cn(isDark ? "bg-neutral-800" : "bg-white")}>
-                    <SelectItem value="expired">منقضی شده</SelectItem>
-                    <SelectItem value="damaged">آسیب دیده</SelectItem>
-                    <SelectItem value="spillage">ریخته شده</SelectItem>
-                    <SelectItem value="overproduction">تولید اضافه</SelectItem>
-                    <SelectItem value="other">سایر</SelectItem>
+                  <SelectContent className={cn(isDark ? "bg-neutral-800" : "bg-white")} dir="rtl">
+                    <SelectItem value="expired" className="text-right">منقضی شده</SelectItem>
+                    <SelectItem value="damaged" className="text-right">آسیب دیده</SelectItem>
+                    <SelectItem value="spillage" className="text-right">ریخته شده</SelectItem>
+                    <SelectItem value="overproduction" className="text-right">تولید اضافه</SelectItem>
+                    <SelectItem value="other" className="text-right">سایر</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Quantity and Unit */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                    مقدار *
-                  </Label>
+                  <Label className={labelClass}>مقدار *</Label>
                   <Input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={formData.quantity}
                     onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
                     required
-                    className={cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white")}
+                    className={inputClass}
                   />
                 </div>
                 <div>
-                  <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                    واحد *
-                  </Label>
+                  <Label className={labelClass}>واحد *</Label>
                   <Input
                     value={formData.unit}
                     onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
                     required
-                    className={cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white")}
+                    className={inputClass}
                   />
                 </div>
               </div>
 
-              {/* Cost per Unit */}
               <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                  قیمت واحد (تومان) *
-                </Label>
-                <Input
-                  type="number"
-                  step="0.01"
+                <PriceInput
+                  label="قیمت واحد"
                   value={formData.cost_per_unit}
-                  onChange={(e) => setFormData(prev => ({ ...prev, cost_per_unit: e.target.value }))}
+                  onChange={(value, numericValue) => 
+                    setFormData(prev => ({ ...prev, cost_per_unit: value }))
+                  }
                   required
-                  className={cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white")}
+                  min={1}
+                  labelClassName={labelClass}
+                  inputClassName={inputClass}
+                  showValidation={false}
                 />
-                {formData.quantity && formData.cost_per_unit && (
-                  <p className={cn("text-sm mt-1", isDark ? "text-green-400" : "text-green-600")}>
-                    هزینه کل: {formatToman(parseFloat(formData.quantity) * parseFloat(formData.cost_per_unit))}
+                {costHint && (
+                  <p className={cn("text-xs mt-1.5", isDark ? "text-gray-400" : "text-gray-500")}>
+                    {costHint}
                   </p>
+                )}
+                {formData.quantity && formData.cost_per_unit && previewTotal > 0 && (
+                  <div className={cn("text-sm mt-2 space-y-0.5", isDark ? "text-green-400" : "text-green-600")}>
+                    <p>هزینه کل: {formatToman(previewTotal)}</p>
+                    <p className={cn("text-xs", isDark ? "text-gray-400" : "text-gray-500")}>
+                      {toPersianDigits(formData.quantity)} {formData.unit} × {formatToman(parseFloat(formData.cost_per_unit || '0'))}
+                    </p>
+                  </div>
                 )}
               </div>
 
-              {/* Reason */}
               <div>
-                <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                  دلیل (اختیاری)
-                </Label>
+                <Label className={labelClass}>دلیل (اختیاری)</Label>
                 <Textarea
                   value={formData.reason}
                   onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
                   rows={3}
-                  className={cn(isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white")}
+                  className={inputClass}
                 />
               </div>
+            </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 justify-end pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseDialog}
-                  disabled={submitting}
-                  className={cn(
-                    isDark
-                      ? "border-neutral-700 text-white hover:bg-neutral-800"
-                      : "border-gray-300"
-                  )}
-                >
-                  انصراف
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="bg-coffee-600 hover:bg-coffee-700 text-white"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="animate-spin mr-2" size={16} />
-                      در حال ذخیره...
-                    </>
-                  ) : editingRecord ? (
-                    "ذخیره تغییرات"
-                  ) : (
-                    "ثبت ضایعات"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+            <DialogFooter className="px-6 py-4 border-t shrink-0 flex-row-reverse gap-2 sm:gap-2">
+              <Button
+                type="submit"
+                form="waste-form"
+                disabled={submitting}
+                className="bg-coffee-600 hover:bg-coffee-700 text-white"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="animate-spin ml-2" size={16} />
+                    در حال ذخیره...
+                  </>
+                ) : editingRecord ? (
+                  "ذخیره تغییرات"
+                ) : (
+                  "ثبت ضایعات"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCloseDialog}
+                disabled={submitting}
+                className={cn(
+                  isDark
+                    ? "border-neutral-700 text-white hover:bg-neutral-800"
+                    : "border-gray-300"
+                )}
+              >
+                انصراف
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Filters */}
-      <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
-            <div className="flex-1">
-              <ScrollingJalaliDatePicker
-                value={dateRange.from}
-                onChange={(value) => setDateRange(prev => ({ ...prev, from: value }))}
-                label="از تاریخ"
-                isDark={isDark}
-              />
+      <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white border-gray-200")}>
+        <CardContent className="p-4 space-y-4">
+          <div>
+            <p className={cn("text-xs font-medium mb-2", isDark ? "text-gray-400" : "text-gray-600")}>
+              بازه سریع
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {REPORT_DATE_PRESETS.map(p => (
+                <Button
+                  key={p.id}
+                  size="sm"
+                  variant={activePreset === p.id ? "default" : "outline"}
+                  onClick={() => applyPreset(p.id, p.days)}
+                  className={cn(
+                    "text-xs sm:text-sm",
+                    activePreset !== p.id && (isDark ? "border-neutral-700" : "border-gray-300"),
+                    activePreset === p.id && "bg-coffee-600 hover:bg-coffee-700 text-white"
+                  )}
+                >
+                  {p.label}
+                </Button>
+              ))}
             </div>
-            <div className="flex-1">
-              <ScrollingJalaliDatePicker
-                value={dateRange.to}
-                onChange={(value) => setDateRange(prev => ({ ...prev, to: value }))}
-                label="تا تاریخ"
-                isDark={isDark}
-              />
-            </div>
-            <div className="flex-1">
-              <Label className={cn(isDark ? "text-gray-300" : "text-gray-700")}>
-                نوع ضایعات
-              </Label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+            <ScrollingJalaliDatePicker
+              value={dateRange.from}
+              onChange={v => handleDateChange("from", v)}
+              label="از تاریخ"
+              isDark={isDark}
+            />
+            <ScrollingJalaliDatePicker
+              value={dateRange.to}
+              onChange={v => handleDateChange("to", v)}
+              label="تا تاریخ"
+              isDark={isDark}
+            />
+            <div>
+              <Label className={labelClass}>نوع ضایعات</Label>
               <Select value={selectedWasteType} onValueChange={setSelectedWasteType}>
-                <SelectTrigger className={cn(
-                  isDark ? "bg-neutral-800 border-neutral-700 text-white" : "bg-white"
-                )}>
+                <SelectTrigger className={selectTriggerClass} dir="rtl">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className={cn(isDark ? "bg-neutral-800" : "bg-white")}>
-                  <SelectItem value="all">همه</SelectItem>
-                  <SelectItem value="expired">منقضی شده</SelectItem>
-                  <SelectItem value="damaged">آسیب دیده</SelectItem>
-                  <SelectItem value="spillage">ریخته شده</SelectItem>
-                  <SelectItem value="overproduction">تولید اضافه</SelectItem>
-                  <SelectItem value="other">سایر</SelectItem>
+                <SelectContent className={cn(isDark ? "bg-neutral-800" : "bg-white")} dir="rtl">
+                  <SelectItem value="all" className="text-right">همه</SelectItem>
+                  <SelectItem value="expired" className="text-right">منقضی شده</SelectItem>
+                  <SelectItem value="damaged" className="text-right">آسیب دیده</SelectItem>
+                  <SelectItem value="spillage" className="text-right">ریخته شده</SelectItem>
+                  <SelectItem value="overproduction" className="text-right">تولید اضافه</SelectItem>
+                  <SelectItem value="other" className="text-right">سایر</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <Button
               variant="outline"
-              onClick={() => {
-                setDateRange({ from: "", to: "" });
-                setSelectedWasteType("all");
-              }}
+              onClick={handleResetFilters}
               className={cn(
-                isDark
-                  ? "border-neutral-700 text-white hover:bg-neutral-800"
-                  : "border-gray-300"
+                "w-full sm:w-auto",
+                isDark ? "border-neutral-700 text-white hover:bg-neutral-800" : "border-gray-300"
               )}
             >
               بازنشانی
             </Button>
+          </div>
+
+          <div className="pt-1 border-t border-dashed border-gray-200 dark:border-neutral-800">
+            <p className={cn("text-xs", isDark ? "text-gray-500" : "text-gray-500")}>
+              بازه فعال:{" "}
+              <span className={cn("font-medium", isDark ? "text-gray-300" : "text-gray-700")}>
+                {rangeLabel()}
+              </span>
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -525,7 +616,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-row-reverse">
               <div>
                 <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
                   تعداد ثبت‌ها
@@ -541,7 +632,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
 
         <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-row-reverse">
               <div>
                 <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
                   مقدار کل ضایعات
@@ -557,7 +648,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
 
         <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-row-reverse">
               <div>
                 <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
                   هزینه کل
@@ -573,7 +664,7 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
 
         <Card className={cn(isDark ? "bg-neutral-900 border-neutral-800" : "bg-white")}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-row-reverse">
               <div>
                 <p className={cn("text-sm", isDark ? "text-gray-400" : "text-gray-600")}>
                   میانگین هزینه
@@ -601,10 +692,10 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
               <Table>
                 <TableHeader>
                   <TableRow className={isDark ? "border-white/10" : "border-gray-200"}>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>نوع</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>تعداد</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>مقدار</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>هزینه کل</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>نوع</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>تعداد</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>مقدار</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>هزینه کل</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -654,15 +745,15 @@ export default function WasteManager({ isDark = false }: WasteManagerProps) {
               <Table>
                 <TableHeader>
                   <TableRow className={isDark ? "border-white/10" : "border-gray-200"}>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>تاریخ</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>نام محصول</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>نوع</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>مقدار</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>قیمت واحد</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>هزینه کل</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>دلیل</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>ثبت کننده</TableHead>
-                    <TableHead className={isDark ? "text-gray-300" : "text-gray-700"}>عملیات</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>تاریخ</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>نام محصول</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>نوع</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>مقدار</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>قیمت واحد</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>هزینه کل</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>دلیل</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>ثبت کننده</TableHead>
+                    <TableHead className={cn("text-right", isDark ? "text-gray-300" : "text-gray-700")}>عملیات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import { validateImage } from "@/lib/imageService";
 import sharp from "sharp";
 import path from "path";
@@ -29,18 +29,8 @@ const getSiteSettingsUploadDir = () => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can upload settings images
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const formData = await request.formData();
     const imageFile = formData.get("image") as File | null;

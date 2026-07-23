@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import { v4 as uuidv4 } from "uuid";
 
 // GET all branches
@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
 // POST create new branch
 export async function POST(request: NextRequest) {
   try {
-    const authErr = ensureAdmin(request);
-    if (authErr) return authErr;
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const body = await request.json();

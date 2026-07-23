@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess, getAdminAuth } from "@/lib/adminApiAuth";
 import { compressAndSaveImage, validateImage } from "@/lib/imageService";
 import crypto from "crypto";
 
@@ -10,16 +10,19 @@ export async function GET(request: NextRequest) {
     const db = getDatabase();
     const { searchParams } = new URL(request.url);
     const includePhotos = searchParams.get("include_photos") === "true";
+    const includeAll = searchParams.get("all") === "true";
+    const isAdmin = getAdminAuth(request).authenticated;
+
+    const activeFilter = includeAll && isAdmin ? "" : "WHERE g.is_active = 1";
 
     let galleries;
     if (includePhotos) {
-      // Get galleries with photos
       galleries = db.prepare(`
         SELECT g.*, 
                COUNT(p.id) as photo_count
         FROM photo_galleries g
         LEFT JOIN photos p ON g.id = p.gallery_id
-        WHERE g.is_active = 1
+        ${activeFilter}
         GROUP BY g.id
         ORDER BY g.display_order ASC, g.created_at DESC
       `).all() as any[];
@@ -38,13 +41,12 @@ export async function GET(request: NextRequest) {
         }));
       }
     } else {
-      // Get galleries only
       galleries = db.prepare(`
         SELECT g.*, 
                COUNT(p.id) as photo_count
         FROM photo_galleries g
         LEFT JOIN photos p ON g.id = p.gallery_id
-        WHERE g.is_active = 1
+        ${activeFilter}
         GROUP BY g.id
         ORDER BY g.display_order ASC, g.created_at DESC
       `).all() as any[];
@@ -70,8 +72,8 @@ export async function GET(request: NextRequest) {
 
 // POST create new gallery (admin only)
 export async function POST(request: NextRequest) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();

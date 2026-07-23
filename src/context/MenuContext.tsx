@@ -6,13 +6,24 @@ import { DEFAULT_MENU } from "@/constants";
 import {
   subscribeToMenu,
   subscribeToOrders,
+  subscribeToStaffOrders,
   addMenuItemToDB,
   updateMenuItemInDB,
   deleteMenuItemFromDB,
   getMenuItems,
   createOrderInDB,
-  updateOrderStatusInDB
+  updateOrderStatusInDB,
+  updateStaffOrderStatusInDB,
+  getAuthHeaders,
 } from "@/services/dbService";
+import {
+  clearAllPanelSessionStorage,
+  isAdminPanelRole,
+  persistAdminSession,
+  persistStaffSession,
+  type AdminPanelRole
+} from "@/lib/adminSession";
+import { logoutPanelSession } from "@/lib/panelLogout";
 
 const MenuContext = createContext<MenuContextType | undefined>(undefined);
 
@@ -40,47 +51,86 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       const auth = sessionStorage.getItem("vaje_auth");
       const userType = sessionStorage.getItem("vaje_userType");
 
-      if (auth === "true") {
-        setIsAuthenticated(true);
-        const role = sessionStorage.getItem("vaje_role");
-        if (role === "admin" || role === "super_admin") {
-          setUserRole(role as "admin" | "super_admin");
-        } else if (userType === "staff") {
-          setUserRole(null);
-        }
-      } else {
-        try {
-          const adminResponse = await fetch("/api/auth/validate", { credentials: "include" });
-          if (adminResponse.ok) {
-            const data = await adminResponse.json();
-            setIsAuthenticated(true);
-            sessionStorage.setItem("vaje_auth", "true");
-            if (data.role === "admin" || data.role === "super_admin") {
+      try {
+        if (auth === "true") {
+          setIsAuthenticated(true);
+          const role = sessionStorage.getItem("vaje_role");
+          if (isAdminPanelRole(role) && userType === "admin") {
+            setUserRole(role);
+          } else if (userType === "staff") {
+            setUserRole(null);
+          }
+
+          const res = await fetch("/api/auth/validate", {
+            credentials: "include",
+            headers: getAuthHeaders(),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (isAdminPanelRole(data.role)) {
               setUserRole(data.role);
-              sessionStorage.setItem("vaje_role", data.role);
-              sessionStorage.setItem("vaje_userType", "admin");
-            }
-          } else {
-            const staffResponse = await fetch("/api/staff/auth/validate", { credentials: "include" });
-            if (staffResponse.ok) {
-              const staffData = await staffResponse.json();
-              if (staffData.authenticated) {
-                setIsAuthenticated(true);
-                sessionStorage.setItem("vaje_auth", "true");
-                sessionStorage.setItem("vaje_userType", "staff");
-                sessionStorage.setItem("vaje_role", staffData.staff.role);
-                sessionStorage.setItem("staff_data", JSON.stringify(staffData.staff));
-              }
+              persistAdminSession(data.role);
+              return;
             }
           }
-        } catch (err) {
-          console.error("Auth validation failed:", err);
-        }
-      }
 
-      const storedQr = sessionStorage.getItem("vaje_qr_url");
-      if (storedQr) setQrCodeUrl(storedQr);
-      setAuthChecked(true);
+          if (userType === "admin") {
+            clearAllPanelSessionStorage();
+            setIsAuthenticated(false);
+            setUserRole(null);
+            return;
+          }
+
+          const staffRes = await fetch("/api/staff/auth/validate", {
+            credentials: "include",
+          });
+          if (staffRes.ok) {
+            const staffData = await staffRes.json();
+            if (staffData.authenticated) {
+              setIsAuthenticated(true);
+              setUserRole(null);
+              persistStaffSession(staffData.staff, staffData.staff.role);
+              return;
+            }
+          }
+
+          clearAllPanelSessionStorage();
+          setIsAuthenticated(false);
+          setUserRole(null);
+        } else {
+          const adminResponse = await fetch("/api/auth/validate", {
+            credentials: "include",
+            headers: getAuthHeaders(),
+          });
+          if (adminResponse.ok) {
+            const data = await adminResponse.json();
+            if (isAdminPanelRole(data.role)) {
+              setIsAuthenticated(true);
+              setUserRole(data.role);
+              persistAdminSession(data.role);
+              return;
+            }
+          }
+
+          const staffResponse = await fetch("/api/staff/auth/validate", {
+            credentials: "include",
+          });
+          if (staffResponse.ok) {
+            const staffData = await staffResponse.json();
+            if (staffData.authenticated) {
+              setIsAuthenticated(true);
+              setUserRole(null);
+              persistStaffSession(staffData.staff, staffData.staff.role);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Auth validation failed:", err);
+      } finally {
+        const storedQr = sessionStorage.getItem("vaje_qr_url");
+        if (storedQr) setQrCodeUrl(storedQr);
+        setAuthChecked(true);
+      }
     };
 
     checkAuth();
@@ -104,19 +154,28 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     return unsubscribeMenu;
   }, [isAdminUser]);
 
-  // ── Orders sync — admin dashboard only ───────────────────────────────────
+  // ── Orders sync — admin + staff dashboard ────────────────────────────────
   useEffect(() => {
-    if (!isAdminUser) {
-      setOrders([]);
-      return;
+    if (typeof window === "undefined") return;
+
+    const panelUserType = sessionStorage.getItem("vaje_userType");
+
+    if (isAdminUser) {
+      const unsubscribeOrders = subscribeToOrders(fetchedOrders => {
+        setOrders(fetchedOrders);
+      }, 15_000);
+      return unsubscribeOrders;
     }
 
-    const unsubscribeOrders = subscribeToOrders(fetchedOrders => {
-      setOrders(fetchedOrders);
-    }, 15_000);
+    if (isAuthenticated && panelUserType === "staff") {
+      const unsubscribeStaffOrders = subscribeToStaffOrders(fetchedOrders => {
+        setOrders(fetchedOrders);
+      }, 15_000);
+      return unsubscribeStaffOrders;
+    }
 
-    return unsubscribeOrders;
-  }, [isAdminUser]);
+    setOrders([]);
+  }, [isAdminUser, isAuthenticated]);
 
   const addItem = async (newItem: Omit<MenuItem, "id">, imageFile?: File) => {
     await addMenuItemToDB(newItem, imageFile);
@@ -167,26 +226,44 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const updateOrderStatus = async (id: string, status: Order["status"]) => {
+    const panelUserType =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("vaje_userType")
+        : null;
+
+    if (panelUserType === "staff") {
+      await updateStaffOrderStatusInDB(id, status);
+      return;
+    }
+
     await updateOrderStatusInDB(id, status);
   };
 
-  const login = (role: "admin" | "super_admin") => {
+  const login = (role: AdminPanelRole) => {
     setIsAuthenticated(true);
     setUserRole(role);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("vaje_auth", "true");
-      sessionStorage.setItem("vaje_role", role);
-    }
+    persistAdminSession(role);
+    setAuthChecked(true);
+    return true;
+  };
+
+  const loginStaff = () => {
+    setIsAuthenticated(true);
+    setUserRole(null);
+    setAuthChecked(true);
     return true;
   };
 
   const logout = () => {
     setIsAuthenticated(false);
     setUserRole(null);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("vaje_auth");
-      sessionStorage.removeItem("vaje_role");
-    }
+    setOrders([]);
+    clearAllPanelSessionStorage();
+  };
+
+  const logoutPanel = async () => {
+    await logoutPanelSession();
+    logout();
   };
 
   const updateQrCodeUrl = (url: string) => {
@@ -210,7 +287,9 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         authChecked,
         userRole,
         login,
+        loginStaff,
         logout,
+        logoutPanel,
         qrCodeUrl,
         updateQrCodeUrl
       }}

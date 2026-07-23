@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toPersianDigits } from "@/utils/format";
+import { useToast } from "@/components/ui/toast";
 
 interface OrderItem {
   id: string;
@@ -35,6 +36,7 @@ interface StaffOrdersViewProps {
 }
 
 export default function StaffOrdersView({ role, isDark = true }: StaffOrdersViewProps) {
+  const { error: showError } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Order["status"] | "all">("all");
@@ -192,11 +194,11 @@ export default function StaffOrdersView({ role, isDark = true }: StaffOrdersView
         await fetchOrders();
       } else {
         const error = await response.json();
-        alert(error.error || "خطا در تغییر وضعیت سفارش");
+        showError(error.error || "خطا در تغییر وضعیت سفارش");
       }
     } catch (error) {
       console.error("Failed to update order status:", error);
-      alert("خطا در ارتباط با سرور");
+      showError("خطا در ارتباط با سرور");
     }
   };
 
@@ -423,11 +425,11 @@ export default function StaffOrdersView({ role, isDark = true }: StaffOrdersView
                             await fetchOrders();
                           } else {
                             const error = await response.json();
-                            alert(error.error || "خطا در تغییر وضعیت سفارش");
+                            showError(error.error || "خطا در تغییر وضعیت سفارش");
                           }
                         } catch (error) {
                           console.error("Failed to complete order:", error);
-                          alert("خطا در ارتباط با سرور");
+                          showError("خطا در ارتباط با سرور");
                         }
                       }}
                       className="bg-coffee-600 hover:bg-coffee-500"

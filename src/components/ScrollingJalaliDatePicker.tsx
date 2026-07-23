@@ -202,7 +202,8 @@ const ScrollingJalaliDatePicker: React.FC<ScrollingJalaliDatePickerProps> = ({
 
   const convertToDisplayFormat = (jalaliDate: string) => {
     const [year, month, day] = jalaliDate.split("-").map(Number);
-    return `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
+    const formatted = `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
+    return toPersianDigits(formatted);
   };
 
   // Cleanup timeouts on unmount
@@ -315,7 +316,7 @@ const ScrollingJalaliDatePicker: React.FC<ScrollingJalaliDatePickerProps> = ({
               </div>
 
               {/* Scrolling picker */}
-              <div className="flex relative" style={{ height: "300px" }}>
+              <div className="flex flex-row-reverse relative" style={{ height: "300px" }}>
                 {/* Year column */}
                 <div className="flex-1 relative">
                   <div className={`absolute inset-0 flex items-center justify-center pointer-events-none z-10 ${

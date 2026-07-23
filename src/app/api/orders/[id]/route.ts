@@ -3,6 +3,7 @@ import { getDatabase, formatTimestamp } from '@/lib/database';
 import { ensureAdmin } from '@/lib/auth';
 import { verifyStaffAuth } from '@/lib/staffAuthMiddleware';
 import { validateSession } from '@/lib/authMiddleware';
+import { deductInventoryForOrder } from '@/services/productsService';
 import crypto from 'crypto';
 
 // PATCH update order status (admin or barista/manager)
@@ -163,7 +164,7 @@ export async function PATCH(
       }
     }
     
-    if (status === 'completed' && canCompleteOrder) {
+    if (status === 'completed' && canCompleteOrder && oldStatus !== 'completed') {
       // Award loyalty points if customer exists (1 point per 1000 tomans)
       const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
       console.log(`[Loyalty Points] Processing order ${id}, customerId: ${order?.customerId}, totalPrice: ${order?.totalPrice}`);
@@ -199,50 +200,17 @@ export async function PATCH(
       } else {
         console.log(`[Loyalty Points] Order ${id} has no customerId, skipping points award`);
       }
-      const orderItems = db.prepare('SELECT * FROM order_items WHERE orderId = ?').all(id) as any[];
-      const { v4: uuidv4 } = await import('uuid');
 
-      for (const orderItem of orderItems) {
-        // Get menu item ingredients (both raw materials and packed products)
-        const ingredients = db.prepare(`
-          SELECT mi.*, p.type as productType, p.name as productName
-          FROM menu_ingredients mi
-          INNER JOIN products p ON mi.productId = p.id
-          WHERE mi.menuItemId = ?
-        `).all(orderItem.menuItemId) as any[];
-
-        // For each ingredient, decrease product stock
-        for (const ingredient of ingredients) {
-          const product = db.prepare('SELECT * FROM products WHERE id = ?').get(ingredient.productId) as any;
-          if (!product) continue;
-
-          // Calculate total quantity needed
-          // For raw materials: ingredient.quantity × order item quantity (e.g., 20g × 2 = 40g)
-          // For packed products: ingredient.quantity × order item quantity (typically 1 × quantity)
-          const totalQuantity = ingredient.quantity * orderItem.quantity;
-          const newStock = Math.max(0, product.currentStock - totalQuantity);
-
-          // Update product stock
-          db.prepare(`
-            UPDATE products SET currentStock = ?, updatedAt = ? WHERE id = ?
-          `).run(newStock, now, product.id);
-
-          // Log inventory change
-          const logId = uuidv4();
-          db.prepare(`
-            INSERT INTO inventory_logs (id, productId, changeType, quantity, previousStock, newStock, orderId, note, createdAt)
-            VALUES (?, ?, 'order_consumed', ?, ?, ?, ?, ?, ?)
-          `).run(
-            logId,
-            product.id,
-            -totalQuantity, // Negative for consumption
-            product.currentStock,
-            newStock,
-            id,
-            `${product.type === 'raw_material' ? 'Raw material' : 'Packed product'}: ${ingredient.productName} used for ${orderItem.name} (${orderItem.quantity}x)`,
-            now
-          );
-        }
+      const deduction = deductInventoryForOrder(id);
+      if (deduction.productsDeducted === 0) {
+        console.warn(
+          `[Inventory] Order ${id} completed but no stock was deducted. ` +
+            `Items missing ingredients: ${deduction.itemsWithoutIngredients.join(", ") || "none"}`
+        );
+      } else {
+        console.log(
+          `[Inventory] Order ${id}: deducted ${deduction.productsDeducted} product(s)`
+        );
       }
     }
 

@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
       query += " WHERE status = ?";
       params.push("ready");
     } else if (role === "barista") {
-      // Baristas see pending and preparing orders
-      query += " WHERE status IN (?, ?)";
-      params.push("pending", "preparing");
+      // Baristas see new customer orders and in-progress kitchen orders
+      query += " WHERE status IN (?, ?, ?)";
+      params.push("pending", "preparing", "ready");
     } else if (role === "manager") {
       // Managers see all orders
       // No filter

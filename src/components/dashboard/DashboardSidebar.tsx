@@ -24,6 +24,9 @@ import {
   ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AdminLogo from "@/components/dashboard/AdminLogo";
+import AdminAccountModal from "@/components/dashboard/AdminAccountModal";
+import { ADMIN_ROLE_LABELS } from "@/lib/adminPageMeta";
 import { toPersianDigits } from "@/utils/format";
 
 export type DashboardPage =
@@ -67,6 +70,13 @@ interface DashboardSidebarProps {
   onMobileOpen?: () => void;
   onMobileClose?: () => void;
   pendingOrdersCount?: number;
+  userName?: string;
+  userRoleLabel?: string | null;
+  userEmail?: string;
+  userType?: "admin" | "staff" | null;
+  canAccessSiteSettings?: boolean;
+  onNavigate?: (page: DashboardPage) => void;
+  allowedPages?: DashboardPage[];
 }
 
 const navItems: NavItem[] = [
@@ -220,6 +230,7 @@ const navItems: NavItem[] = [
 ];
 
 const SIDEBAR_TAB_GUIDE_KEY = "vaje_sidebar_tab_guide_seen";
+const SIDEBAR_FOOTER_HEIGHT = 88;
 const MOBILE_RAIL_WIDTH = 80;
 const MOBILE_OVERLAY_WIDTH = 256;
 
@@ -239,10 +250,25 @@ export default function DashboardSidebar({
   isMobileOpen = false,
   onMobileOpen,
   onMobileClose,
-  pendingOrdersCount = 0
+  pendingOrdersCount = 0,
+  userName = "مدیر سیستم",
+  userRoleLabel,
+  userEmail,
+  userType = "admin",
+  canAccessSiteSettings = false,
+  onNavigate,
+  allowedPages
 }: DashboardSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [accountModalOpen, setAccountModalOpen] = React.useState(false);
+  const roleLabel = userRoleLabel
+    ? ADMIN_ROLE_LABELS[userRoleLabel] ?? userRoleLabel
+    : userRole
+      ? ADMIN_ROLE_LABELS[userRole] ?? userRole
+      : userType === "staff"
+        ? "کارمند"
+        : "کاربر";
 
   // JS-based mobile detection — avoids broken CSS-variable breakpoints
   const [isMobile, setIsMobile] = React.useState(() => {
@@ -331,6 +357,9 @@ export default function DashboardSidebar({
   const currentPage = searchParams.get("page") || "dashboard";
   const activePage = currentPage as DashboardPage;
   const filteredItems = navItems.filter(item => {
+    if (allowedPages && allowedPages.length > 0) {
+      return allowedPages.includes(item.id);
+    }
     if (!userRole) return false;
     if (item.role === "all") return true;
     return item.role === userRole;
@@ -417,10 +446,7 @@ export default function DashboardSidebar({
 
   const desktopWidth = isCollapsed ? MOBILE_RAIL_WIDTH : localWidth;
 
-  const panelClassName = cn(
-    "bg-inherit",
-    isDark ? "border-white/5" : "border-admin-border"
-  );
+  const panelBorderClass = isDark ? "border-white/5" : "border-admin-border";
 
   const renderSidebarPanel = (
     expanded: boolean,
@@ -432,7 +458,7 @@ export default function DashboardSidebar({
       closeOverlayOnNavClick?: boolean;
     }
   ) => (
-    <>
+    <div className="relative flex flex-col h-full min-h-0">
       {options.showResize && (
         <div
           onMouseDown={handleResizeStart}
@@ -457,46 +483,32 @@ export default function DashboardSidebar({
 
       <div
         className={cn(
-          "relative flex items-center h-16 px-3 border-b shrink-0",
-          expanded ? "justify-between" : "justify-center",
-          panelClassName
+          "shrink-0 flex h-12 items-center border-b px-2",
+          expanded ? "justify-end" : "justify-center",
+          "border-b",
+          panelBorderClass
         )}
       >
-        {expanded && (
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white text-base font-bold bg-coffee-600">
-              ک
-            </div>
-            <span
-              className={cn(
-                "text-sm font-semibold truncate",
-                isDark ? "text-white" : "text-admin-primary"
-              )}
-            >
-              پنل مدیریت
-            </span>
-          </div>
-        )}
-
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={options.onToggle}
-            className={cn(
-              "p-1.5 rounded-lg transition-colors",
-              isDark
-                ? "hover:bg-white/10 text-gray-400 hover:text-white"
-                : "hover:bg-admin-muted text-admin-secondary hover:text-admin-primary"
-            )}
-            title={options.toggleTitle}
-            aria-label={options.toggleTitle}
-          >
-            {options.toggleIcon}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={options.onToggle}
+          className={cn(
+            "p-1.5 rounded-lg transition-colors",
+            isDark
+              ? "hover:bg-white/10 text-gray-400 hover:text-white"
+              : "hover:bg-admin-muted text-admin-secondary hover:text-admin-primary"
+          )}
+          title={options.toggleTitle}
+          aria-label={options.toggleTitle}
+        >
+          {options.toggleIcon}
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-4"
+        style={{ paddingBottom: SIDEBAR_FOOTER_HEIGHT }}
+      >
         {Object.entries(groupedItems).map(([groupKey, items]) => (
           <div key={groupKey}>
             {expanded && groupLabels[groupKey] && (
@@ -517,11 +529,81 @@ export default function DashboardSidebar({
           </div>
         ))}
       </div>
-    </>
+
+      <div
+        className={cn(
+          "absolute bottom-0 inset-x-0 z-10 border-t px-3 py-3",
+          isDark ? "bg-[#111318]" : "bg-admin-sidebar",
+          panelBorderClass
+        )}
+        style={{ height: SIDEBAR_FOOTER_HEIGHT }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setAccountModalOpen(true);
+            if (options.closeOverlayOnNavClick) onMobileClose?.();
+          }}
+          className={cn(
+            "w-full h-full rounded-lg transition-colors text-right",
+            isDark ? "hover:bg-white/5" : "hover:bg-admin-muted/80"
+          )}
+          aria-label="تنظیمات حساب"
+        >
+          {expanded ? (
+            <div className="flex items-center gap-2.5 min-w-0 h-full">
+              <AdminLogo size="sm" rounded="full" />
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "text-sm font-semibold truncate leading-tight",
+                    isDark ? "text-white" : "text-admin-primary"
+                  )}
+                >
+                  پنل مدیریت
+                </p>
+                <p
+                  className={cn(
+                    "text-xs truncate",
+                    isDark ? "text-gray-400" : "text-admin-secondary"
+                  )}
+                >
+                  {userName}
+                </p>
+                <p
+                  className={cn(
+                    "text-[10px] truncate",
+                    isDark ? "text-gray-500" : "text-admin-muted-text"
+                  )}
+                >
+                  {roleLabel}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <AdminLogo size="sm" rounded="full" />
+            </div>
+          )}
+        </button>
+      </div>
+    </div>
   );
 
   return (
     <>
+      <AdminAccountModal
+        open={accountModalOpen}
+        onOpenChange={setAccountModalOpen}
+        isDark={isDark}
+        userName={userName}
+        roleLabel={roleLabel}
+        userEmail={userEmail}
+        userType={userType}
+        canAccessSiteSettings={canAccessSiteSettings}
+        onNavigate={onNavigate}
+      />
+
       {/* Mobile: arrow tab only (no icon rail) */}
       {isMobile && !isMobileOpen && (
         <div className="fixed top-1/2 -translate-y-1/2 start-0 z-30 flex items-center">
@@ -590,7 +672,7 @@ export default function DashboardSidebar({
       {isMobile && isMobileOpen && (
         <div
           className={cn(
-            "fixed inset-y-0 start-0 z-50 flex flex-col h-screen border-l shadow-2xl",
+            "fixed inset-y-0 start-0 z-50 flex flex-col h-screen border-l shadow-2xl overflow-hidden",
             isDark
               ? "bg-[#111318] border-white/5"
               : "bg-admin-sidebar border-admin-border"
@@ -610,7 +692,7 @@ export default function DashboardSidebar({
       {!isMobile && (
         <div
           className={cn(
-            "relative flex flex-col h-screen border-l shrink-0 shadow-lg",
+            "relative flex flex-col h-screen border-l shrink-0 shadow-lg overflow-hidden",
             isResizing ? "transition-none" : "transition-[width] duration-200",
             isDark
               ? "bg-[#111318] border-white/5"

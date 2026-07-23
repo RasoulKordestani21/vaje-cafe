@@ -3,19 +3,27 @@ import { initializeDatabase, getDatabase } from "@/lib/database";
 
 initializeDatabase();
 
-// GET public site settings (no auth required)
-export async function GET(request: NextRequest) {
+/**
+ * Keys that are considered internal/admin-only and should NOT be exposed
+ * through the public endpoint. Theme tokens are already served by /api/theme.
+ */
+const EXCLUDED_PREFIXES = ["theme_"];
+
+// GET public site settings — no auth required
+export async function GET(_request: NextRequest) {
   try {
     const db = getDatabase();
-    const settings = db.prepare("SELECT key, value FROM site_settings").all();
-    
-    // Convert to key-value object for easier access
-    const settingsMap: Record<string, string> = {};
-    (settings as Array<{ key: string; value: string | null }>).forEach(s => {
-      settingsMap[s.key] = s.value || "";
-    });
+    const rows = db
+      .prepare("SELECT key, value FROM site_settings")
+      .all() as Array<{ key: string; value: string | null }>;
 
-    return NextResponse.json({ settings: settingsMap });
+    const settings: Record<string, string> = {};
+    for (const { key, value } of rows) {
+      if (EXCLUDED_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+      settings[key] = value ?? "";
+    }
+
+    return NextResponse.json({ settings });
   } catch (error) {
     console.error("Public settings GET error:", error);
     return NextResponse.json(
@@ -24,4 +32,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -103,35 +103,8 @@ export function initializeAuthTables() {
   database.exec(createMenuIngredientsTable);
   database.exec(createCategoriesTable);
 
-  // Initialize default categories if empty
-  try {
-    const categoryCount = database
-      .prepare("SELECT COUNT(*) as count FROM raw_material_categories")
-      .get() as any;
-    
-    if (categoryCount.count === 0) {
-      const defaultCategories = [
-        { name: "قهوه و اسپرسو", description: "دانه‌های قهوه و محصولات اسپرسو" },
-        { name: "شیر و کره", description: "محصولات لبنی" },
-        { name: "شکر و شربت", description: "شیرینی و شربت" },
-        { name: "آرد و پودر", description: "آرد و پودرهای مختلف" },
-        { name: "ادویه و تزئینات", description: "ادویه و تزئینات" }
-      ];
-
-      const insertStmt = database.prepare(`
-        INSERT INTO raw_material_categories (id, name, description, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-
-      for (const cat of defaultCategories) {
-        const { v4: uuid } = require("uuid");
-        const now = Date.now();
-        insertStmt.run(uuid(), cat.name, cat.description, now, now);
-      }
-    }
-  } catch (e) {
-    console.warn("Could not initialize default categories", e);
-  }
+  // Categories are defined in src/constants/inventoryCategories.ts
+  // raw_material_categories table kept for legacy compatibility only
 }
 
 export function closeAuthDb() {

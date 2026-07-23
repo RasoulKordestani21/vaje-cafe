@@ -10,6 +10,7 @@ import {
   Menu, X, User, LogOut, Moon, Sun, ShoppingCart, ShoppingBag,
 } from "lucide-react";
 import { LOGO_URL } from "@/constants";
+import { useSiteSettings } from "@/context/SiteSettingsContext";
 import StoryViewer from "@/components/stories/StoryViewer";
 import StoryAvatar from "@/components/stories/StoryAvatar";
 import { cn } from "@/lib/utils";
@@ -31,13 +32,15 @@ const NAV_LINKS = [
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen]             = useState(false);
   const [isDark, setIsDark]             = useState(true);
-  const [logoUrl, setLogoUrl]           = useState(LOGO_URL);
   const [stories, setStories]           = useState<Story[]>([]);
   const [showStoryViewer, setShowStoryViewer] = useState(false);
   const [scrolled, setScrolled]         = useState(false);
 
+  const { getSetting } = useSiteSettings();
+  const logoUrl = getSetting("logo_url") || LOGO_URL;
+
   const pathname = usePathname();
-  const { isAuthenticated: isAdminAuthenticated, logout: adminLogout } = useMenu();
+  const { isAuthenticated: isAdminAuthenticated, logoutPanel } = useMenu();
   const { isDark: themeIsDark, toggleTheme } = useContext(ThemeContext);
 
   // Customer context — may not be available on admin routes
@@ -64,19 +67,14 @@ const Navbar: React.FC = () => {
     return () => window.removeEventListener("themechange", handler);
   }, [themeIsDark]);
 
-  // Fetch logo + stories
+  // Fetch stories (logo_url comes from SiteSettingsContext)
   useEffect(() => {
     if (isAdminRoute) return;
-    Promise.all([
-      fetch("/api/settings/public").then(r => r.json()),
-      fetch("/api/stories").then(r => r.json()),
-    ])
-      .then(([sd, st]) => {
-        if (sd.settings?.logo_url) setLogoUrl(sd.settings.logo_url);
-        if (st.stories?.length)    setStories(st.stories);
-      })
+    fetch("/api/stories")
+      .then(r => r.json())
+      .then(st => { if (st.stories?.length) setStories(st.stories); })
       .catch(() => {});
-  }, [pathname]);
+  }, [isAdminRoute]);
 
   // Scroll detection
   useEffect(() => {
@@ -195,7 +193,11 @@ const Navbar: React.FC = () => {
               {/* Admin logout */}
               {isAdminAuthenticated && (
                 <button
-                  onClick={adminLogout}
+                  onClick={() => {
+                    void logoutPanel().then(() => {
+                      window.location.href = "/login";
+                    });
+                  }}
                   className={cn(iconBtn, "text-red-400 hover:bg-red-900/20")}
                   aria-label="خروج"
                 >

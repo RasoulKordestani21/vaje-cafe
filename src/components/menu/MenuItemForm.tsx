@@ -10,16 +10,17 @@ import {
   Star,
   CheckCircle2
 } from "lucide-react";
-import { MenuItem, CATEGORIES } from "@/types";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { MenuItem } from "@/types";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+  decodeMenuCategory,
+  encodeMenuCategory,
+  getDefaultMenuCategory,
+  getMenuSubcategoriesForGroup,
+} from "@/constants/menuCategories";
+import MenuCategorySelect from "@/components/menu/MenuCategorySelect";
+import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/PriceInput";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -45,11 +46,14 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
   compact = false,
   hideTitle = false
 }) => {
+  const defaultCat = getDefaultMenuCategory();
+  const [categoryGroup, setCategoryGroup] = useState(defaultCat.categoryGroup);
+  const [category, setCategory] = useState(defaultCat.category);
   const [formData, setFormData] = useState<Omit<MenuItem, "id">>({
     name: "",
     description: "",
     price: 0,
-    category: "اسپرسو",
+    category: encodeMenuCategory(defaultCat.categoryGroup, defaultCat.category),
     available: true,
     imageUrl: "",
     is_pinned: false,
@@ -60,6 +64,10 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
 
   useEffect(() => {
     if (editingItem) {
+      const decoded =
+        decodeMenuCategory(editingItem.category) ?? getDefaultMenuCategory();
+      setCategoryGroup(decoded.categoryGroup);
+      setCategory(decoded.category);
       setFormData({
         name: editingItem.name,
         description: editingItem.description,
@@ -72,11 +80,14 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
       });
       setImagePreview(editingItem.imageUrl || null);
     } else {
+      const fresh = getDefaultMenuCategory();
+      setCategoryGroup(fresh.categoryGroup);
+      setCategory(fresh.category);
       setFormData({
         name: "",
         description: "",
         price: 0,
-        category: "اسپرسو",
+        category: encodeMenuCategory(fresh.categoryGroup, fresh.category),
         available: true,
         imageUrl: "",
         is_pinned: false,
@@ -97,13 +108,20 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(formData, imageFile || undefined);
+    const payload = {
+      ...formData,
+      category: encodeMenuCategory(categoryGroup, category),
+    };
+    await onSubmit(payload, imageFile || undefined);
     if (!editingItem) {
+      const fresh = getDefaultMenuCategory();
+      setCategoryGroup(fresh.categoryGroup);
+      setCategory(fresh.category);
       setFormData({
         name: "",
         description: "",
         price: 0,
-        category: "اسپرسو",
+        category: encodeMenuCategory(fresh.categoryGroup, fresh.category),
         available: true,
         imageUrl: "",
         is_pinned: false,
@@ -181,46 +199,32 @@ const MenuItemForm: React.FC<MenuItemFormProps> = ({
               className={inputClass}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs mb-1.5 block">قیمت (تومان) *</Label>
-              <Input
-                required
-                type="number"
-                step="1000"
-                min="0"
-                value={formData.price}
-                onChange={e =>
-                  setFormData({
-                    ...formData,
-                    price: parseFloat(e.target.value) || 0
-                  })
-                }
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <Label className="text-xs mb-1.5 block">دسته‌بندی</Label>
-              <Select
-                value={formData.category}
-                onValueChange={value =>
-                  setFormData({ ...formData, category: value })
-                }
-              >
-                <SelectTrigger className={inputClass}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent
-                  className={cn(isDark ? "bg-neutral-900 text-white" : "bg-white")}
-                >
-                  {CATEGORIES.map(cat => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-4">
+            <PriceInput
+              label="قیمت"
+              value={formData.price.toString()}
+              onChange={(value, numericValue) =>
+                setFormData({
+                  ...formData,
+                  price: numericValue
+                })
+              }
+              required
+              min={1}
+              labelClassName="text-xs"
+              inputClassName={inputClass}
+            />
+            <MenuCategorySelect
+              categoryGroup={categoryGroup}
+              category={category}
+              onCategoryGroupChange={group => {
+                setCategoryGroup(group);
+                const subs = group ? getMenuSubcategoriesForGroup(group) : [];
+                setCategory(subs[0] ?? "");
+              }}
+              onCategoryChange={setCategory}
+              isDark={isDark}
+            />
           </div>
         </div>
 

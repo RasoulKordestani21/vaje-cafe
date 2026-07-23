@@ -4,6 +4,7 @@ import React from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
 import { Input } from "@/components/ui/input";
+import { PriceInput } from "@/components/ui/PriceInput";
 import {
   Select,
   SelectContent,
@@ -108,40 +109,26 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
             />
           </div>
         </div>
-        <div>
-          <label
-            className={cn(
-              "block text-xs mb-1.5",
-              isDark ? "text-gray-400" : "text-gray-500"
-            )}
-          >
-            حداقل مبلغ (تومان)
-          </label>
-          <Input
-            type="number"
-            value={value.minAmount}
-            onChange={e => handleChange({ minAmount: e.target.value })}
-            placeholder="0"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label
-            className={cn(
-              "block text-xs mb-1.5",
-              isDark ? "text-gray-400" : "text-gray-500"
-            )}
-          >
-            حداکثر مبلغ (تومان)
-          </label>
-          <Input
-            type="number"
-            value={value.maxAmount}
-            onChange={e => handleChange({ maxAmount: e.target.value })}
-            placeholder="بدون محدودیت"
-            className={inputClass}
-          />
-        </div>
+        <PriceInput
+          label="حداقل مبلغ"
+          value={value.minAmount || ''}
+          onChange={(value, numericValue) => handleChange({ minAmount: value })}
+          placeholder="۰"
+          min={0}
+          labelClassName={cn("text-xs", isDark ? "text-gray-400" : "text-gray-500")}
+          inputClassName={inputClass}
+          showValidation={false}
+        />
+        <PriceInput
+          label="حداکثر مبلغ"
+          value={value.maxAmount || ''}
+          onChange={(value, numericValue) => handleChange({ maxAmount: value })}
+          placeholder="بدون محدودیت"
+          min={0}
+          labelClassName={cn("text-xs", isDark ? "text-gray-400" : "text-gray-500")}
+          inputClassName={inputClass}
+          showValidation={false}
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

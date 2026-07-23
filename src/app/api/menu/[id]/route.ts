@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, formatTimestamp } from '@/lib/database';
+import { initializeDatabase, getDatabase, formatTimestamp } from '@/lib/database';
 import { compressAndSaveImage, deleteImage } from '@/lib/imageService';
-import { ensureAdmin } from '@/lib/auth';
+import { requireAdminAccess } from '@/lib/adminApiAuth';
+
+initializeDatabase();
 
 // PUT update menu item
 export async function PUT(
@@ -9,8 +11,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   // Require admin token for updating menu items
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
   try {
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
@@ -107,8 +109,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   // Require admin token for deleting menu items
-  const authErr = ensureAdmin(_request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(_request);
+  if (!auth.authorized) return auth.error;
   try {
     const db = getDatabase();
     const { id } = await Promise.resolve(params);
@@ -127,8 +129,16 @@ export async function DELETE(
       deleteImage((existing as any).imageFileName);
     }
 
-    // Delete from database
-    db.prepare('DELETE FROM menu_items WHERE id = ?').run(id);
+    const deleteMenuItem = db.transaction((menuItemId: string) => {
+      // experience_comments.menu_item_id has no ON DELETE action
+      db.prepare(
+        'UPDATE experience_comments SET menu_item_id = NULL WHERE menu_item_id = ?'
+      ).run(menuItemId);
+      // menu_ingredients + ratings cascade; order_items SET NULL via FK migration
+      db.prepare('DELETE FROM menu_items WHERE id = ?').run(menuItemId);
+    });
+
+    deleteMenuItem(id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useContext, useCallback } from "react";
-import { X, ChevronRight, ChevronLeft, Images } from "lucide-react";
+import { X, ChevronRight, ChevronLeft, Images, Play } from "lucide-react";
 import { toPersianDigits } from "@/utils/format";
 import { ThemeContext } from "@/app/providers";
 import { cn } from "@/lib/utils";
+import GalleryVideoPlayer from "@/components/gallery/GalleryVideoPlayer";
 
 interface Photo {
   id: string;
@@ -12,6 +13,7 @@ interface Photo {
   image_url: string;
   caption: string | null;
   display_order: number;
+  media_type?: "image" | "video";
 }
 
 interface Gallery {
@@ -28,6 +30,13 @@ interface Gallery {
 interface FlatPhoto extends Photo {
   galleryTitle: string;
   galleryId: string;
+}
+
+function isVideoMedia(photo: Photo): boolean {
+  return (
+    photo.media_type === "video" ||
+    /\.(mp4|webm|mov)(\?|$)/i.test(photo.image_url)
+  );
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -160,7 +169,7 @@ export default function GalleryPage() {
           <>
             {/* Photo count */}
             <p className={cn("text-xs mb-5", muted)}>
-              {toPersianDigits(displayPhotos.length.toString())} تصویر
+              {toPersianDigits(displayPhotos.length.toString())} فایل
             </p>
 
             {/* ── Masonry-style grid (CSS columns) ────────────────────── */}
@@ -171,16 +180,35 @@ export default function GalleryPage() {
                   className="break-inside-avoid cursor-pointer group relative rounded-xl overflow-hidden"
                   onClick={() => openLightbox(idx)}
                 >
-                  <img
-                    src={photo.image_url}
-                    alt={photo.caption ?? photo.galleryTitle}
-                    loading="lazy"
-                    className="w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    onError={e => {
-                      (e.target as HTMLImageElement).src =
-                        `https://picsum.photos/400/300?random=${photo.id}`;
-                    }}
-                  />
+                  {isVideoMedia(photo) ? (
+                    <div className="relative w-full bg-black/80 rounded-xl overflow-hidden">
+                      <video
+                        src={photo.image_url}
+                        className="w-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-95"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
+                        <div className="w-12 h-12 rounded-full bg-[#186244]/90 flex items-center justify-center shadow-lg ring-2 ring-white/20">
+                          <Play size={20} className="text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative w-full bg-black/80 rounded-xl overflow-hidden">
+                      <img
+                        src={photo.image_url}
+                        alt={photo.caption ?? photo.galleryTitle}
+                        loading="lazy"
+                        className="w-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-95"
+                        onError={e => {
+                          (e.target as HTMLImageElement).src =
+                            `https://picsum.photos/400/300?random=${photo.id}`;
+                        }}
+                      />
+                    </div>
+                  )}
                   {/* hover overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-end p-3">
                     <div className="translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
@@ -202,7 +230,7 @@ export default function GalleryPage() {
       {/* ── Lightbox ────────────────────────────────────────────────────── */}
       {lbOpen && displayPhotos[lbIndex] && (
         <div
-          className="fixed inset-0 z-50 bg-black/96 flex flex-col items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/96 flex flex-col items-center justify-center p-4 bg-black/90"
           onClick={closeLightbox}
         >
           {/* close */}
@@ -239,16 +267,27 @@ export default function GalleryPage() {
             </>
           )}
 
-          {/* image */}
+          {/* media */}
           <div
-            className="max-w-5xl w-full flex flex-col items-center"
+            className="max-w-5xl w-full flex flex-col items-center relative z-10"
             onClick={e => e.stopPropagation()}
           >
-            <img
-              src={displayPhotos[lbIndex].image_url}
-              alt={displayPhotos[lbIndex].caption ?? ""}
-              className="max-h-[80vh] max-w-full w-auto rounded-xl object-contain shadow-2xl"
-            />
+            <div className="relative rounded-xl overflow-hidden shadow-2xl max-w-full">
+              {isVideoMedia(displayPhotos[lbIndex]) ? (
+                <GalleryVideoPlayer
+                  key={displayPhotos[lbIndex].id}
+                  src={displayPhotos[lbIndex].image_url}
+                  autoPlay
+                  className="max-h-[75vh] min-w-[280px] w-full"
+                />
+              ) : (
+                <img
+                  src={displayPhotos[lbIndex].image_url}
+                  alt={displayPhotos[lbIndex].caption ?? ""}
+                  className="max-h-[75vh] max-w-full w-auto object-contain block"
+                />
+              )}
+            </div>
             {/* caption */}
             {(displayPhotos[lbIndex].caption || displayPhotos[lbIndex].galleryTitle) && (
               <div className="mt-4 text-center">
@@ -281,7 +320,11 @@ export default function GalleryPage() {
                       realIdx === lbIndex ? "border-white scale-110" : "border-white/20 opacity-50"
                     )}
                   >
-                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                    {isVideoMedia(p) ? (
+                      <video src={p.image_url} className="w-full h-full object-cover" muted preload="metadata" />
+                    ) : (
+                      <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                    )}
                   </button>
                 );
               })}

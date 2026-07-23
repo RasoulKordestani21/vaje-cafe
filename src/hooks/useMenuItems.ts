@@ -1,5 +1,7 @@
 import { useState, useCallback } from "react";
 import { MenuItem } from "@/types";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface UseMenuItemsOptions {
   items: MenuItem[];
@@ -24,6 +26,8 @@ export const useMenuItems = ({
   updateItem,
   deleteItem
 }: UseMenuItemsOptions): UseMenuItemsReturn => {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -34,9 +38,10 @@ export const useMenuItems = ({
         if (editingItem) {
           await updateItem(editingItem.id, data, imageFile);
           setEditingItem(null);
+          success("آیتم منو با موفقیت ویرایش شد");
         } else {
           await addItem(data, imageFile);
-          // After adding, find the new item and set it for editing (to allow adding ingredients)
+          success("آیتم منو با موفقیت اضافه شد");
           setTimeout(() => {
             const newItem = items.find(
               item =>
@@ -51,12 +56,13 @@ export const useMenuItems = ({
         }
       } catch (error) {
         console.error("Error saving menu item:", error);
+        showError("خطا در ذخیره آیتم منو");
         throw error;
       } finally {
         setIsSubmitting(false);
       }
     },
-    [editingItem, addItem, updateItem, items]
+    [editingItem, addItem, updateItem, items, success, showError]
   );
 
   const handleEdit = useCallback((item: MenuItem) => {
@@ -65,14 +71,26 @@ export const useMenuItems = ({
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (window.confirm("آیا از حذف این آیتم اطمینان دارید؟")) {
+      const ok = await confirm({
+        title: "حذف آیتم منو",
+        message: "آیا از حذف این آیتم اطمینان دارید؟",
+        confirmLabel: "حذف",
+        variant: "destructive",
+      });
+      if (!ok) return;
+
+      try {
         await deleteItem(id);
         if (editingItem?.id === id) {
           setEditingItem(null);
         }
+        success("آیتم منو با موفقیت حذف شد");
+      } catch (error) {
+        console.error("Error deleting menu item:", error);
+        showError("خطا در حذف آیتم منو");
       }
     },
-    [deleteItem, editingItem]
+    [confirm, deleteItem, editingItem, success, showError]
   );
 
   const handleCancel = useCallback(() => {
@@ -89,7 +107,4 @@ export const useMenuItems = ({
     handleCancel
   };
 };
-
-
-
 

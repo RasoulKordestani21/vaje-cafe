@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { deleteMediaByUrl } from "@/lib/imageService";
 
 // PUT update photo (admin only)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { photoId: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
@@ -77,19 +78,25 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { photoId: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
     const { photoId } = await Promise.resolve(params);
 
-    const existing = db.prepare("SELECT * FROM photos WHERE id = ?").get(photoId);
+    const existing = db.prepare("SELECT * FROM photos WHERE id = ?").get(photoId) as
+      | { image_url?: string }
+      | undefined;
     if (!existing) {
       return NextResponse.json(
         { error: "Photo not found" },
         { status: 404 }
       );
+    }
+
+    if (existing.image_url) {
+      deleteMediaByUrl(existing.image_url);
     }
 
     db.prepare("DELETE FROM photos WHERE id = ?").run(photoId);

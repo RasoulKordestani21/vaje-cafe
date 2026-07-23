@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PriceInput } from "@/components/ui/PriceInput";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -29,6 +30,8 @@ import { timestampToJalaliString } from "@/utils/dateFormatter";
 import { jalaliToTimestamp, timestampToJalali } from "@/utils/jalaliDateUtils";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   adminInput,
   adminSelectContent,
@@ -71,6 +74,8 @@ const amountInputClass =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]";
 
 const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
+  const { success, error: showError, warning } = useToast();
+  const confirm = useConfirm();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [totals, setTotals] = useState<ExpenseTotals[]>([]);
   const [grandTotal, setGrandTotal] = useState(0);
@@ -83,7 +88,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
     description: "",
     date: todayJalali(),
   });
-  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     category: "all",
     dateFrom: "",
@@ -119,7 +123,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
       setGrandTotal(data.grandTotal || 0);
     } catch (err: any) {
       console.error("Error fetching expenses:", err);
-      setError(err.message);
+      showError(err.message || "خطا در بارگذاری هزینه‌ها");
     } finally {
       setLoading(false);
     }
@@ -144,21 +148,19 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
       });
     }
     setIsDialogOpen(true);
-    setError(null);
   };
 
   const handleSave = async () => {
     try {
-      setError(null);
 
       if (!formData.category || !formData.amount || !formData.date) {
-        setError("دسته‌بندی، مبلغ و تاریخ الزامی است");
+        warning("دسته‌بندی، مبلغ و تاریخ الزامی است");
         return;
       }
 
       const amount = parseInt(sanitizeAmount(formData.amount), 10);
       if (isNaN(amount) || amount <= 0) {
-        setError("مبلغ باید یک عدد مثبت باشد");
+        warning("مبلغ باید یک عدد مثبت باشد");
         return;
       }
 
@@ -186,16 +188,21 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
 
       setIsDialogOpen(false);
       fetchExpenses();
+      success(editingExpense ? "هزینه با موفقیت ویرایش شد" : "هزینه با موفقیت ثبت شد");
     } catch (err: any) {
       console.error("Error saving expense:", err);
-      setError(err.message);
+      showError(err.message || "خطا در ذخیره هزینه");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا مطمئن هستید که می‌خواهید این هزینه را حذف کنید؟")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "حذف هزینه",
+      message: "آیا مطمئن هستید که می‌خواهید این هزینه را حذف کنید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/expenses/${id}`, {
@@ -210,9 +217,10 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
       }
 
       fetchExpenses();
+      success("هزینه با موفقیت حذف شد");
     } catch (err: any) {
       console.error("Error deleting expense:", err);
-      alert(err.message);
+      showError(err.message || "خطا در حذف هزینه");
     }
   };
 
@@ -439,11 +447,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {error && (
-              <div className={cn("p-3 rounded-md text-sm", isDark ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-600")}>
-                {error}
-              </div>
-            )}
 
             <div className="space-y-2">
               <Label className={isDark ? "text-gray-300" : "text-gray-700"}>دسته‌بندی</Label>
@@ -464,25 +467,18 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ isDark }) => {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className={isDark ? "text-gray-300" : "text-gray-700"}>مبلغ (تومان)</Label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={formData.amount ? toPersianDigits(formData.amount) : ""}
-                onChange={(e) =>
-                  setFormData({ ...formData, amount: sanitizeAmount(e.target.value) })
-                }
-                placeholder="۰"
-                dir="ltr"
-                className={cn(inputClass, amountInputClass, "text-left")}
-              />
-              {parsedAmount > 0 && (
-                <p className={cn("text-sm font-medium", isDark ? "text-emerald-400" : "text-emerald-600")}>
-                  {formatToman(parsedAmount)}
-                </p>
-              )}
-            </div>
+            <PriceInput
+              label="مبلغ"
+              value={formData.amount}
+              onChange={(value, numericValue) => 
+                setFormData({ ...formData, amount: value })
+              }
+              required
+              placeholder="۰"
+              min={1}
+              labelClassName={isDark ? "text-gray-300" : "text-gray-700"}
+              inputClassName={cn(inputClass, amountInputClass)}
+            />
 
             <div className="space-y-2">
               <ScrollingJalaliDatePicker

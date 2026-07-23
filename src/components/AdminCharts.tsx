@@ -58,6 +58,7 @@ export const AdminCharts: React.FC<AdminChartsProps> = ({ stats }) => {
     : [];
 
   const categoryData = (stats.categoryBreakdown || []).filter(d => d.value > 0);
+  const categoryTotal = categoryData.reduce((sum, d) => sum + d.value, 0);
   const hasCategoryData = categoryData.length > 0;
 
   const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.08)";
@@ -89,6 +90,21 @@ export const AdminCharts: React.FC<AdminChartsProps> = ({ stats }) => {
               : toPersianDigits(String(entry.value))}
           </p>
         ))}
+      </div>
+    );
+  };
+
+  const PieTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const { name, value } = payload[0];
+    const pct = categoryTotal > 0 ? (value / categoryTotal) * 100 : 0;
+    return (
+      <div style={tooltipStyle} className="px-3 py-2.5 space-y-1">
+        <p className="font-semibold text-sm">{name}</p>
+        <p className="text-xs">{formatToman(value)}</p>
+        <p className="text-xs opacity-80">
+          {toPersianDigits(pct.toFixed(1))}٪ از کل
+        </p>
       </div>
     );
   };
@@ -214,7 +230,7 @@ export const AdminCharts: React.FC<AdminChartsProps> = ({ stats }) => {
               <PieChart>
                 <Pie
                   data={categoryData}
-                  cx="50%"
+                  cx="42%"
                   cy="50%"
                   innerRadius={55}
                   outerRadius={90}
@@ -229,20 +245,14 @@ export const AdminCharts: React.FC<AdminChartsProps> = ({ stats }) => {
                     />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  formatter={(value: number, name: string) => [
-                    `${toPersianDigits(String(value))}%`,
-                    name
-                  ]}
-                />
+                <Tooltip content={<PieTooltip />} />
                 <Legend
                   layout="vertical"
-                  align="left"
+                  align="right"
                   verticalAlign="middle"
                   iconType="circle"
                   iconSize={8}
-                  wrapperStyle={{ fontSize: "12px", lineHeight: "1.8" }}
+                  wrapperStyle={{ fontSize: "12px", lineHeight: "1.8", paddingRight: 8 }}
                   formatter={value => (
                     <span style={{ color: isDark ? "#d1d5db" : "#374151" }}>
                       {value}

@@ -117,12 +117,13 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
     setIsOpen(false);
   };
 
+  const toPersianDigits = (str: string) =>
+    str.replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+
   const convertToDisplayFormat = (jalaliDate: string) => {
     const [year, month, day] = jalaliDate.split("-").map(Number);
-    return `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(
-      2,
-      "0"
-    )}`;
+    const formatted = `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
+    return toPersianDigits(formatted);
   };
 
   const days = getJalaliDays(currentMonth.year, currentMonth.month);
@@ -149,7 +150,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
   return (
     <>
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-[9998] bg-black/20"
           onClick={() => setIsOpen(false)}
         />
@@ -187,7 +188,7 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
                   ? "bg-neutral-900 border-neutral-700"
                   : "bg-white border-gray-200"
               }`}
-              style={{ 
+              style={{
                 width: "320px",
                 top: "50%",
                 left: "50%",
@@ -195,113 +196,113 @@ export const JalaliDatePicker: React.FC<JalaliDatePickerProps> = ({
                 maxHeight: "90vh",
                 overflow: "auto"
               }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
-            {/* Header with navigation */}
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <button
-                onClick={handleNextMonth}
-                className={`p-1 rounded-lg transition-colors ${
-                  isDark
-                    ? "hover:bg-neutral-800 text-gray-400 hover:text-white"
-                    : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <ChevronRight size={20} />
-              </button>
-
-              <div className="text-center flex-1">
-                <div
-                  className={`font-bold text-lg font-vazir ${
-                    isDark ? "text-white" : "text-gray-900"
+              {/* Header with navigation */}
+              <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+                <button
+                  onClick={handleNextMonth}
+                  className={`p-1 rounded-lg transition-colors ${
+                    isDark
+                      ? "hover:bg-neutral-800 text-gray-400 hover:text-white"
+                      : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  {monthNames[currentMonth.month - 1]} {currentMonth.year}
+                  <ChevronRight size={20} />
+                </button>
+
+                <div className="text-center flex-1">
+                  <div
+                    className={`font-bold text-lg font-vazir ${
+                      isDark ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {monthNames[currentMonth.month - 1]} {currentMonth.year}
+                  </div>
                 </div>
+
+                <button
+                  onClick={handlePrevMonth}
+                  className={`p-1 rounded-lg transition-colors ${
+                    isDark
+                      ? "hover:bg-neutral-800 text-gray-400 hover:text-white"
+                      : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  <ChevronLeft size={20} />
+                </button>
               </div>
 
-              <button
-                onClick={handlePrevMonth}
-                className={`p-1 rounded-lg transition-colors ${
-                  isDark
-                    ? "hover:bg-neutral-800 text-gray-400 hover:text-white"
-                    : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+              {/* Day names header */}
+              <div
+                className={`grid grid-cols-7 gap-1 p-2 border-b ${
+                  isDark ? "border-neutral-700" : "border-gray-200"
                 }`}
               >
-                <ChevronLeft size={20} />
-              </button>
-            </div>
+                {dayNames.map(day => (
+                  <div
+                    key={day}
+                    className={`text-center text-xs font-bold py-2 font-vazir ${
+                      isDark ? "text-gray-500" : "text-gray-600"
+                    }`}
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
 
-            {/* Day names header */}
-            <div
-              className={`grid grid-cols-7 gap-1 p-2 border-b ${
-                isDark ? "border-neutral-700" : "border-gray-200"
-              }`}
-            >
-              {dayNames.map(day => (
-                <div
-                  key={day}
-                  className={`text-center text-xs font-bold py-2 font-vazir ${
-                    isDark ? "text-gray-500" : "text-gray-600"
-                  }`}
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
+              {/* Days grid */}
+              <div className="grid grid-cols-7 gap-1 p-2">
+                {days.map((day, index) => (
+                  <button
+                    key={index}
+                    onClick={() => day && handleSelectDay(day)}
+                    disabled={!day}
+                    className={`h-10 rounded-lg text-sm font-vazir transition-colors flex items-center justify-center ${
+                      !day
+                        ? "cursor-default"
+                        : value ===
+                            `${currentMonth.year}-${String(
+                              currentMonth.month
+                            ).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                          ? isDark
+                            ? "bg-emerald-600 text-white font-bold"
+                            : "bg-emerald-500 text-white font-bold"
+                          : isDark
+                            ? "text-gray-300 hover:bg-neutral-800"
+                            : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {day && (
+                      <span className="text-right w-full">
+                        {String(day).padStart(2, "0")}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-            {/* Days grid */}
-            <div className="grid grid-cols-7 gap-1 p-2">
-              {days.map((day, index) => (
+              {/* Footer */}
+              <div
+                className={`p-3 border-t ${
+                  isDark ? "border-neutral-700" : "border-gray-200"
+                }`}
+              >
                 <button
-                  key={index}
-                  onClick={() => day && handleSelectDay(day)}
-                  disabled={!day}
-                  className={`h-10 rounded-lg text-sm font-vazir transition-colors flex items-center justify-center ${
-                    !day
-                      ? "cursor-default"
-                      : value ===
-                        `${currentMonth.year}-${String(
-                          currentMonth.month
-                        ).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                      ? isDark
-                        ? "bg-emerald-600 text-white font-bold"
-                        : "bg-emerald-500 text-white font-bold"
-                      : isDark
-                      ? "text-gray-300 hover:bg-neutral-800"
-                      : "text-gray-700 hover:bg-gray-100"
+                  onClick={() => setIsOpen(false)}
+                  className={`w-full py-2 rounded-lg font-medium font-vazir text-sm transition-colors ${
+                    isDark
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-emerald-500 hover:bg-emerald-600 text-white"
                   }`}
                 >
-                  {day && (
-                    <span className="text-right w-full">
-                      {String(day).padStart(2, "0")}
-                    </span>
-                  )}
+                  تایید
                 </button>
-              ))}
+              </div>
             </div>
-
-            {/* Footer */}
-            <div
-              className={`p-3 border-t ${
-                isDark ? "border-neutral-700" : "border-gray-200"
-              }`}
-            >
-              <button
-                onClick={() => setIsOpen(false)}
-                className={`w-full py-2 rounded-lg font-medium font-vazir text-sm transition-colors ${
-                  isDark
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                }`}
-              >
-                تایید
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
     </>
   );
 };

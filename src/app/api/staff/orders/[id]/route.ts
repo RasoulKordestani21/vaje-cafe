@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
 import { ensureStaff } from "@/lib/staffAuthMiddleware";
+import { deductInventoryForOrder } from "@/services/productsService";
 
 // PATCH update order status (for barista, manager, and waiter)
 export async function PATCH(
@@ -73,44 +74,17 @@ export async function PATCH(
     stmt.run(status, now, id);
 
     // If order is being completed, decrease inventory (only managers can complete)
-    if (status === "completed" && staff.role === "manager") {
-      const orderItems = db.prepare("SELECT * FROM order_items WHERE orderId = ?").all(id) as any[];
-      const { v4: uuidv4 } = await import("uuid");
-
-      for (const orderItem of orderItems) {
-        const ingredients = db.prepare(`
-          SELECT mi.*, p.type as productType, p.name as productName
-          FROM menu_ingredients mi
-          INNER JOIN products p ON mi.productId = p.id
-          WHERE mi.menuItemId = ?
-        `).all(orderItem.menuItemId) as any[];
-
-        for (const ingredient of ingredients) {
-          const product = db.prepare("SELECT * FROM products WHERE id = ?").get(ingredient.productId) as any;
-          if (!product) continue;
-
-          const totalQuantity = ingredient.quantity * orderItem.quantity;
-          const newStock = Math.max(0, product.currentStock - totalQuantity);
-
-          db.prepare(`
-            UPDATE products SET currentStock = ?, updatedAt = ? WHERE id = ?
-          `).run(newStock, now, product.id);
-
-          const logId = uuidv4();
-          db.prepare(`
-            INSERT INTO inventory_logs (id, productId, changeType, quantity, previousStock, newStock, orderId, note, createdAt)
-            VALUES (?, ?, 'order_consumed', ?, ?, ?, ?, ?, ?)
-          `).run(
-            logId,
-            product.id,
-            -totalQuantity,
-            product.currentStock,
-            newStock,
-            id,
-            `${product.type === "raw_material" ? "Raw material" : "Packed product"}: ${ingredient.productName} used for ${orderItem.name} (${orderItem.quantity}x)`,
-            now
-          );
-        }
+    if (
+      status === "completed" &&
+      staff.role === "manager" &&
+      existing.status !== "completed"
+    ) {
+      const deduction = deductInventoryForOrder(id);
+      if (deduction.productsDeducted === 0) {
+        console.warn(
+          `[Inventory] Order ${id} completed but no stock was deducted. ` +
+            `Items missing ingredients: ${deduction.itemsWithoutIngredients.join(", ") || "none"}`
+        );
       }
     }
 

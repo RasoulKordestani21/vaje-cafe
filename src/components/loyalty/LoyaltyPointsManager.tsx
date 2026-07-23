@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { formatJalaliDate } from "@/utils/jalaliDateUtils";
 import { timestampToJalali } from "@/utils/jalaliDateUtils";
+import { useToast } from "@/components/ui/toast";
 
 interface Customer {
   id: string;
@@ -52,6 +53,7 @@ interface LoyaltyPointsManagerProps {
 }
 
 const LoyaltyPointsManager: React.FC<LoyaltyPointsManagerProps> = ({ isDark = true }) => {
+  const { success, error: showError, warning } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,13 +125,13 @@ const LoyaltyPointsManager: React.FC<LoyaltyPointsManagerProps> = ({ isDark = tr
 
   const handleAdjustPoints = async () => {
     if (!selectedCustomer || !adjustPoints) {
-      alert("لطفاً مبلغ را وارد کنید");
+      warning("لطفاً مبلغ را وارد کنید");
       return;
     }
 
     const points = parseInt(adjustPoints);
     if (isNaN(points) || points === 0) {
-      alert("لطفاً یک عدد معتبر وارد کنید");
+      warning("لطفاً یک عدد معتبر وارد کنید");
       return;
     }
 
@@ -157,14 +159,14 @@ const LoyaltyPointsManager: React.FC<LoyaltyPointsManagerProps> = ({ isDark = tr
         if (selectedCustomer) {
           await fetchCustomerTransactions(selectedCustomer.id);
         }
-        alert("امتیاز با موفقیت تنظیم شد");
+        success("امتیاز با موفقیت تنظیم شد");
       } else {
         const error = await response.json();
-        alert(error.error || "خطا در تنظیم امتیاز");
+        showError(error.error || "خطا در تنظیم امتیاز");
       }
     } catch (err) {
       console.error("Failed to adjust points:", err);
-      alert("خطا در تنظیم امتیاز");
+      showError("خطا در تنظیم امتیاز");
     } finally {
       setAdjusting(false);
     }

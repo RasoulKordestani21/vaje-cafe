@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase } from '@/lib/database';
-import { ensureAdmin } from '@/lib/auth';
+import { requireAdminAccess } from '@/lib/adminApiAuth';
 
 // PUT update menu items display order
 export async function PUT(request: NextRequest) {
   // Require admin token for reordering menu items
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();

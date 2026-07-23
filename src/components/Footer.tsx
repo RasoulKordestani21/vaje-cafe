@@ -5,15 +5,14 @@ import Link from "next/link";
 import { Instagram, MapPin, Clock, Coffee } from "lucide-react";
 import { LOGO_URL } from "@/constants";
 import { ThemeContext } from "@/app/providers";
+import { useSiteSettings } from "@/context/SiteSettingsContext";
 import { cn } from "@/lib/utils";
-
-interface FooterSettings {
-  footer_description?: string;
-  footer_social_instagram?: string;
-  footer_address?: string;
-  logo_url?: string;
-  site_name?: string;
-}
+import {
+  DAY_NAMES_FA,
+  PERSIAN_WEEK_ORDER,
+  normalizeTime,
+} from "@/utils/workingHoursUtils";
+import { toPersianDigits } from "@/utils/format";
 
 interface WorkingHour {
   day_of_week: number;
@@ -31,39 +30,57 @@ const NAV_LINKS = [
 
 const Footer: React.FC = () => {
   const { isDark }  = useContext(ThemeContext);
-  const [settings, setSettings]         = useState<FooterSettings>({});
-  const [logoUrl, setLogoUrl]           = useState(LOGO_URL);
+  const { getSetting } = useSiteSettings();
   const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/settings/public").then(r => r.json()),
-      fetch("/api/working-hours").then(r => r.ok ? r.json() : { workingHours: [] }),
-    ])
-      .then(([sData, hData]) => {
-        if (sData.settings) {
-          setSettings(sData.settings);
-          if (sData.settings.logo_url) setLogoUrl(sData.settings.logo_url);
+    fetch("/api/working-hours")
+      .then(r => r.ok ? r.json() : { workingHours: [] })
+      .then(hData => {
+        if (Array.isArray(hData?.workingHours)) {
+          setWorkingHours(
+            hData.workingHours.map((h: WorkingHour) => ({
+              ...h,
+              open_time: normalizeTime(h.open_time),
+              close_time: normalizeTime(h.close_time),
+            }))
+          );
         }
-        if (Array.isArray(hData?.workingHours)) setWorkingHours(hData.workingHours);
       })
       .catch(() => {});
   }, []);
 
-  const siteName    = settings.site_name              || "کافه واژه";
-  const description = settings.footer_description     || "خلق لحظاتی از شفافیت و ارتباط با هنر قهوه تخصصی. تجربه‌ای متفاوت از عطر و طعم در فضایی آرام.";
-  const instagram   = settings.footer_social_instagram || "@vaje.cafe";
-  const address     = settings.footer_address          || "اسدآباد – خیابان صاحب‌زمان شرقی – دور میدان نون و قلم";
+  const logoUrl     = getSetting("logo_url") || LOGO_URL;
+  const siteName    = getSetting("site_name", "کافه واژه");
+  const description = getSetting("footer_description", "خلق لحظاتی از شفافیت و ارتباط با هنر قهوه تخصصی. تجربه‌ای متفاوت از عطر و طعم در فضایی آرام.");
+  const instagram   = getSetting("footer_social_instagram", "@vaje.cafe");
+  const address     = getSetting("footer_address", "اسدآباد – خیابان صاحب‌زمان شرقی – دور میدان نون و قلم");
 
   const hoursText = (() => {
-    const open = workingHours.filter(h => h.is_closed === 0);
-    if (open.length === 0) return "همه روزه: ۷:۰۰ تا ۲۳:۰۰";
+    const open = workingHours.filter((h) => h.is_closed === 0);
+    if (open.length === 0) return "همه روزه: ۹:۰۰ تا ۲۳:۰۰";
+
     const first = open[0];
-    const same  = open.every(h => h.open_time === first.open_time && h.close_time === first.close_time);
-    if (same) return `همه روزه: ${first.open_time} تا ${first.close_time}`;
-    const opens  = open.map(h => h.open_time).sort();
-    const closes = open.map(h => h.close_time).sort();
-    return `${opens[0]} تا ${closes[closes.length - 1]}`;
+    const same = open.every(
+      (h) =>
+        normalizeTime(h.open_time) === normalizeTime(first.open_time) &&
+        normalizeTime(h.close_time) === normalizeTime(first.close_time)
+    );
+
+    if (same) {
+      return `همه روزه: ${toPersianDigits(normalizeTime(first.open_time))} تا ${toPersianDigits(normalizeTime(first.close_time))}`;
+    }
+
+    return PERSIAN_WEEK_ORDER.map((dayIndex) => {
+      const hour = workingHours.find((h) => h.day_of_week === dayIndex);
+      if (!hour) return null;
+      if (hour.is_closed === 1) {
+        return `${DAY_NAMES_FA[dayIndex]}: تعطیل`;
+      }
+      return `${DAY_NAMES_FA[dayIndex]}: ${toPersianDigits(normalizeTime(hour.open_time))} تا ${toPersianDigits(normalizeTime(hour.close_time))}`;
+    })
+      .filter(Boolean)
+      .join(" | ");
   })();
 
   // ── Surfaces ───────────────────────────────────────────────────────────────
@@ -88,12 +105,21 @@ const Footer: React.FC = () => {
           {/* Brand column */}
           <div className="sm:col-span-2 lg:col-span-1 space-y-4">
             <div className="flex items-center gap-2.5">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0"
-                style={{ background: "#186244" }}
-              >
-                V
-              </div>
+              {logoUrl && logoUrl !== LOGO_URL ? (
+                <img
+                  src={logoUrl}
+                  alt={siteName}
+                  className="w-9 h-9 rounded-xl object-contain shrink-0"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              ) : (
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0"
+                  style={{ background: "#186244" }}
+                >
+                  V
+                </div>
+              )}
               <div className="leading-none">
                 <p className="text-[10px] font-semibold text-[#186244] tracking-widest uppercase">CAFE</p>
                 <p className={cn("text-sm font-black", textMain)}>VAJE</p>
@@ -144,7 +170,7 @@ const Footer: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Clock size={13} className="text-[#186244] shrink-0" />
-                <span className={cn("text-xs", textMuted)}>{hoursText}</span>
+                <span className={cn("text-xs leading-5", textMuted)}>{hoursText}</span>
               </li>
             </ul>
           </div>

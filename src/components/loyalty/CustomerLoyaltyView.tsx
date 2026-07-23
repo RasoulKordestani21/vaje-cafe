@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { timestampToJalaliString } from "@/utils/dateFormatter";
+import { useToast } from "@/components/ui/toast";
 
 interface LoyaltyReward {
   id: string;
@@ -32,6 +33,7 @@ interface CustomerLoyaltyViewProps {
 }
 
 export default function CustomerLoyaltyView({ isDark = false }: CustomerLoyaltyViewProps) {
+  const { success, error: showError } = useToast();
   const [pointsBalance, setPointsBalance] = useState<number | null>(null);
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [transactions, setTransactions] = useState<PointsTransaction[]>([]);
@@ -113,14 +115,14 @@ export default function CustomerLoyaltyView({ isDark = false }: CustomerLoyaltyV
       if (response.ok) {
         const data = await response.json();
         await fetchLoyaltyData();
-        alert(`پاداش "${data.reward.name}" با موفقیت دریافت شد!`);
+        success(`پاداش "${data.reward.name}" با موفقیت دریافت شد!`);
       } else {
         const error = await response.json();
-        alert(error.error || "خطا در دریافت پاداش");
+        showError(error.error || "خطا در دریافت پاداش");
       }
     } catch (error) {
       console.error("Error redeeming reward:", error);
-      alert("خطا در دریافت پاداش");
+      showError("خطا در دریافت پاداش");
     } finally {
       setRedeeming(null);
     }

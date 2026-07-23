@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 
 initializeDatabase();
 
@@ -33,18 +33,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can update banners
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const {
@@ -140,18 +130,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can delete banners
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const existing = db.prepare("SELECT id FROM banners WHERE id = ?").get(params.id) as { id: string } | undefined;

@@ -23,7 +23,8 @@ import {
   Star,
   MessageSquareText,
   Images,
-  FileText
+  FileText,
+  PackagePlus
 } from "lucide-react";
 import DashboardStats from "@/components/dashboard/DashboardStats";
 import ManualOrderForm from "@/components/ManualOrderForm";
@@ -32,9 +33,10 @@ import { RawMaterialModal } from "@/components/RawMaterialModal";
 import { IngredientModal } from "@/components/IngredientModal";
 import { InventoryLogsModal } from "@/components/InventoryLogsModal";
 import OrderDetailModal from "@/components/OrderDetailModal";
-import StockAdjustmentModal from "@/components/StockAdjustmentModal";
+import InventoryTransactionModal from "@/components/inventory/InventoryTransactionModal";
 import { formatToman, toPersianDigits } from "@/utils/format";
-import { getStats } from "@/services/dbService";
+import { getStats, getAuthHeaders, adminFetchInit } from "@/services/dbService";
+import { getPanelUserType, isAdminPanelRole } from "@/lib/adminSession";
 import { formatPersianNumber } from "@/utils/dateFormatter";
 import { jalaliToTimestamp } from "@/utils/jalaliDateUtils";
 import {
@@ -58,6 +60,7 @@ import CustomerOrders from "@/components/customers/CustomerOrders";
 import BranchesManagement from "@/components/branches/BranchesManagement";
 import CustomersManagement from "@/components/customers/CustomersManagement";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import AdminPageBreadcrumb, { AdminPageTitle } from "@/components/dashboard/AdminPageBreadcrumb";
 import SiteSettings from "@/components/settings/SiteSettings";
 import BannerManager from "@/components/banners/BannerManager";
 import WorkingHoursManager from "@/components/working-hours/WorkingHoursManager";
@@ -85,6 +88,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { QuickAction } from "@/components/dashboard/DashboardHeader";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { adminShellBg, adminContentBg, adminHeaderBg } from "@/lib/adminTheme";
 
 export default function AdminPage() {
@@ -97,13 +102,15 @@ export default function AdminPage() {
     updateOrderStatus,
     isAuthenticated,
     userRole,
-    logout,
+    logoutPanel,
     isLoading
   } = useMenu();
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { isDark, toggleTheme } = useContext(ThemeContext);
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
 
   // Get active page from URL search params, default to "dashboard"
   // Use pathname + search params to ensure component updates on navigation
@@ -168,6 +175,7 @@ export default function AdminPage() {
   const [showManualOrderForm, setShowManualOrderForm] = useState(false);
   const [showMenuForm, setShowMenuForm] = useState(false);
   const [userDisplayName, setUserDisplayName] = useState("مدیر سیستم");
+  const [userEmail, setUserEmail] = useState<string | undefined>();
   const [userRoleKey, setUserRoleKey] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<OrderFilterState>({
     source: "all",
@@ -196,6 +204,8 @@ export default function AdminPage() {
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [selectedProductLogs, setSelectedProductLogs] = useState<any[]>([]);
   const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsProductName, setLogsProductName] = useState("");
+  const [logsProductUnit, setLogsProductUnit] = useState("");
 
   // Inventory Enhancement State
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
@@ -414,20 +424,33 @@ export default function AdminPage() {
 
       if (res.ok) {
         setShowNewProductForm(false);
-        alert("محصول با موفقیت اضافه شد");
-        // Don't refresh here - let the modal's onSave handle it
+        const url =
+          inventoryTypeFilter === "all"
+            ? "/api/products"
+            : `/api/products?type=${inventoryTypeFilter}`;
+        const listRes = await fetch(url);
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setProducts(Array.isArray(data) ? data : []);
+        }
       } else {
         const error = await res.json().catch(() => ({}));
-        alert(`خطا در اضافه کردن محصول: ${error.error || "Unknown error"}`);
+        showError(`خطا در اضافه کردن محصول: ${error.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error adding product:", error);
-      alert("خطا در اضافه کردن محصول");
+      showError("خطا در اضافه کردن محصول");
     }
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm("آیا مطمئن هستید؟")) return;
+    const ok = await confirm({
+      title: "حذف محصول",
+      message: "آیا مطمئن هستید که می‌خواهید این محصول را حذف کنید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/products/${id}`, {
@@ -440,11 +463,11 @@ export default function AdminPage() {
       if (res.ok) {
         setProducts(products.filter(p => p.id !== id));
         setSelectedProduct(null);
-        alert("محصول حذف شد");
+        success("محصول حذف شد");
       }
     } catch (error) {
       console.error("Error deleting product:", error);
-      alert("خطا در حذف محصول");
+      showError("خطا در حذف محصول");
     }
   };
 
@@ -462,6 +485,7 @@ export default function AdminPage() {
       if (res.ok) {
         const updated = await res.json();
         setSelectedProduct(updated);
+        success("محصول با موفقیت ذخیره شد");
         // Refresh products list after a short delay (only if not already fetching)
         setTimeout(() => {
           if (
@@ -488,68 +512,98 @@ export default function AdminPage() {
         }, 200);
         return;
       } else {
-        alert("خطا در ذخیره‌سازی");
+        showError("خطا در ذخیره‌سازی");
       }
     } catch (error) {
       console.error("Error saving product:", error);
-      alert("خطا در ذخیره‌سازی");
+      showError("خطا در ذخیره‌سازی");
     }
   };
 
-  const handleViewLogs = async (productId: string) => {
+  const handleViewLogs = async (
+    productId: string,
+    productName?: string,
+    productUnit?: string
+  ) => {
     try {
-      const res = await fetch(`/api/products/${productId}/logs`);
+      const res = await fetch(
+        `/api/products/${productId}/inventory`,
+        adminFetchInit()
+      );
       if (res.ok) {
         const logs = await res.json();
-        setSelectedProductLogs(logs);
+        const product = products.find(p => p.id === productId);
+        setLogsProductName(productName || product?.name || "محصول");
+        setLogsProductUnit(productUnit || product?.unit || "");
+        setSelectedProductLogs(Array.isArray(logs) ? logs : []);
         setShowLogsModal(true);
+      } else {
+        showError("خطا در دریافت تاریخچه");
       }
     } catch (error) {
       console.error("Failed to fetch logs:", error);
-      alert("خطا در دریافت لاگ‌ها");
+      showError("خطا در دریافت تاریخچه");
     }
   };
 
-  const handleStockAdjustment = async (
-    productId: string,
-    newStock: number,
-    note: string
-  ) => {
+  const refreshProductsList = async () => {
+    const url =
+      inventoryTypeFilter === "all"
+        ? "/api/products"
+        : `/api/products?type=${inventoryTypeFilter}`;
+    const productsRes = await fetch(url, adminFetchInit());
+    if (productsRes.ok) {
+      const data = await productsRes.json();
+      setProducts(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const handleInventoryTransaction = async (payload: {
+    productId: string;
+    operation: "buy" | "sell" | "update";
+    quantity: number;
+    unitPrice?: number;
+    note?: string;
+  }) => {
     try {
-      const res = await fetch(`/api/products/${productId}`, {
-        method: "PUT",
+      const res = await fetch(`/api/products/${payload.productId}/inventory`, {
+        method: "POST",
+        ...adminFetchInit(),
         headers: {
           "Content-Type": "application/json",
-          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+          ...getAuthHeaders(),
         },
-        body: JSON.stringify({
-          currentStock: newStock
-        })
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        alert("موجودی با موفقیت بروزرسانی شد");
-        // Refresh products
-        const url =
-          inventoryTypeFilter === "all"
-            ? "/api/products"
-            : `/api/products?type=${inventoryTypeFilter}`;
-        const productsRes = await fetch(url);
-        if (productsRes.ok) {
-          const data = await productsRes.json();
-          setProducts(Array.isArray(data) ? data : []);
-        }
-        // Refresh inventory data
+        success("عملیات موجودی با موفقیت ثبت شد");
+        await refreshProductsList();
         if (activePage === "inventory" && userRole === "super_admin") {
           inventoryData.refresh();
         }
+        if (selectedProduct?.id === payload.productId) {
+          const updated = await fetch(
+            `/api/products/${payload.productId}`,
+            adminFetchInit()
+          );
+          if (updated.ok) {
+            setSelectedProduct(await updated.json());
+          }
+        }
       } else {
-        alert("خطا در بروزرسانی موجودی");
+        const err = await res.json().catch(() => ({}));
+        showError(err.error || "خطا در ثبت عملیات موجودی");
       }
     } catch (error) {
-      console.error("Error adjusting stock:", error);
-      alert("خطا در بروزرسانی موجودی");
+      console.error("Error recording inventory transaction:", error);
+      showError("خطا در ثبت عملیات موجودی");
     }
+  };
+
+  const openInventoryTransaction = (product: any) => {
+    setAdjustmentProduct(product);
+    setShowStockAdjustment(true);
   };
 
   const handleOrderStatusChange = async (
@@ -592,40 +646,32 @@ export default function AdminPage() {
       setStats(updatedStats as any);
     } catch (error) {
       console.error("Failed to update order status:", error);
-      alert("خطا در بروزرسانی وضعیت سفارش");
+      showError("خطا در بروزرسانی وضعیت سفارش");
     }
   };
 
   const handleLogout = async () => {
-    try {
-      // Call logout API to clear session on server
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-    } catch (err) {
-      console.error("Logout API error:", err);
-    } finally {
-      // Clear sessionStorage (session-based auth)
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("vaje_auth");
-      }
-      // Clear client-side auth
-      logout();
-      router.push("/login");
-    }
+    setUserType(null);
+    setAccessibleTabs([]);
+    setUserDisplayName("مدیر سیستم");
+    setUserEmail(undefined);
+    setUserRoleKey(null);
+    await logoutPanel();
+    router.replace("/login");
   };
 
   // Menu handlers are now in useMenuItems hook
 
   // Define role-based accessible tabs (business logic)
   const getRoleBasedTabs = (): string[] => {
-    // Get role from context or fallback to sessionStorage
     let effectiveRole = userRole;
     if (!effectiveRole && typeof window !== "undefined") {
       const roleFromStorage = sessionStorage.getItem("vaje_role");
-      if (roleFromStorage === "admin" || roleFromStorage === "super_admin") {
-        effectiveRole = roleFromStorage as "admin" | "super_admin";
+      if (
+        getPanelUserType() === "admin" &&
+        isAdminPanelRole(roleFromStorage)
+      ) {
+        effectiveRole = roleFromStorage;
       }
     }
 
@@ -676,8 +722,7 @@ export default function AdminPage() {
     }
 
     if (userType === "staff") {
-      // Staff tabs are fetched from database (can be customized per staff member)
-      return accessibleTabs;
+      return accessibleTabs.length > 0 ? accessibleTabs : ["orders"];
     }
 
     // Default fallback: if authenticated but role not loaded yet, show basic tabs
@@ -688,33 +733,41 @@ export default function AdminPage() {
     return [];
   };
 
-  // Load user display info for header
+  // Load user display info for sidebar / account modal
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !isAuthenticated) return;
 
-    const staffData = sessionStorage.getItem("staff_data");
-    if (staffData) {
+    const panelUserType = getPanelUserType();
+
+    if (panelUserType === "staff") {
+      const staffData = sessionStorage.getItem("staff_data");
+      if (!staffData) return;
       try {
         const parsed = JSON.parse(staffData);
         if (parsed.name) setUserDisplayName(parsed.name);
         if (parsed.role) setUserRoleKey(parsed.role);
-        return;
+        if (parsed.email) setUserEmail(parsed.email);
       } catch {
         /* ignore */
       }
+      return;
     }
 
-    fetch("/api/auth/validate", { credentials: "include" })
+    fetch("/api/auth/validate", {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
         if (data?.user?.name) setUserDisplayName(data.user.name);
-        if (data?.role) setUserRoleKey(data.role);
+        if (data?.user?.email) setUserEmail(data.user.email);
+        if (isAdminPanelRole(data?.role)) setUserRoleKey(data.role);
       })
       .catch(() => {
         const role = sessionStorage.getItem("vaje_role");
-        if (role) setUserRoleKey(role);
+        if (isAdminPanelRole(role)) setUserRoleKey(role);
       });
-  }, []);
+  }, [userType, userRole, isAuthenticated]);
 
   const navigateToPage = (page: DashboardPage) => {
     if (page === "dashboard") {
@@ -747,62 +800,69 @@ export default function AdminPage() {
     }
   };
 
-  // Fetch staff accessible tabs and set default tab
+  // Sync panel user type + staff tab permissions when auth changes
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const userTypeValue = sessionStorage.getItem("vaje_userType");
-      setUserType(userTypeValue as "admin" | "staff" | null);
-
-      if (userTypeValue === "staff") {
-        const staffData = sessionStorage.getItem("staff_data");
-        if (staffData) {
-          const parsed = JSON.parse(staffData);
-
-          // Role-based default tabs (business logic)
-          const roleDefaults: { [key: string]: string[] } = {
-            waiter: ["orders"],
-            barista: ["orders"],
-            manager: ["dashboard", "orders", "stats"]
-          };
-
-          // Fetch accessible tabs from database
-          fetch(`/api/staff/${parsed.id}/tabs`, {
-            credentials: "include"
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (
-                data.permissions &&
-                Array.isArray(data.permissions) &&
-                data.permissions.length > 0
-              ) {
-                setAccessibleTabs(data.permissions);
-              } else {
-                // Use role-based defaults
-                setAccessibleTabs(roleDefaults[parsed.role] || ["orders"]);
-              }
-              // Set default active tab for staff
-              const defaultTab = roleDefaults[parsed.role]?.[0] || "orders";
-              if (defaultTab === "dashboard") {
-                router.push("/dashboard");
-              } else {
-                router.push(`/dashboard?page=${defaultTab}`);
-              }
-            })
-            .catch(() => {
-              // Fallback to role-based defaults on error
-              setAccessibleTabs(roleDefaults[parsed.role] || ["orders"]);
-              const defaultTab = roleDefaults[parsed.role]?.[0] || "orders";
-              if (defaultTab === "dashboard") {
-                router.push("/dashboard");
-              } else {
-                router.push(`/dashboard?page=${defaultTab}`);
-              }
-            });
-        }
-      }
+    if (!isAuthenticated || typeof window === "undefined") {
+      setUserType(null);
+      setAccessibleTabs([]);
+      return;
     }
-  }, []);
+
+    const userTypeValue = getPanelUserType();
+    setUserType(userTypeValue);
+
+    if (userTypeValue !== "staff") {
+      setAccessibleTabs([]);
+      return;
+    }
+
+    const staffData = sessionStorage.getItem("staff_data");
+    if (!staffData) return;
+
+    let parsed: { role?: string };
+    try {
+      parsed = JSON.parse(staffData);
+    } catch {
+      return;
+    }
+
+    const roleDefaults: { [key: string]: string[] } = {
+      waiter: ["orders"],
+      barista: ["orders", "customer-orders"],
+      manager: ["dashboard", "orders", "customer-orders", "stats"]
+    };
+
+    fetch("/api/staff/my-tabs", {
+      credentials: "include"
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (
+          data.permissions &&
+          Array.isArray(data.permissions) &&
+          data.permissions.length > 0
+        ) {
+          setAccessibleTabs(data.permissions);
+        } else {
+          setAccessibleTabs(roleDefaults[parsed.role ?? ""] || ["orders"]);
+        }
+        const defaultTab = roleDefaults[parsed.role ?? ""]?.[0] || "orders";
+        if (defaultTab === "dashboard") {
+          router.replace("/dashboard");
+        } else {
+          router.replace(`/dashboard?page=${defaultTab}`);
+        }
+      })
+      .catch(() => {
+        setAccessibleTabs(roleDefaults[parsed.role ?? ""] || ["orders"]);
+        const defaultTab = roleDefaults[parsed.role ?? ""]?.[0] || "orders";
+        if (defaultTab === "dashboard") {
+          router.replace("/dashboard");
+        } else {
+          router.replace(`/dashboard?page=${defaultTab}`);
+        }
+      });
+  }, [isAuthenticated, router]);
 
   // Check if a tab is accessible based on role
   const isTabAccessible = (tab: string): boolean => {
@@ -814,6 +874,7 @@ export default function AdminPage() {
   if (!isAuthenticated) return null;
 
   const pendingOrdersCount = orders.filter(o => o.status === "pending").length;
+  const sidebarAllowedPages = getRoleBasedTabs() as DashboardPage[];
 
   // Render page content based on activePage
   const renderPageContent = () => {
@@ -856,28 +917,33 @@ export default function AdminPage() {
               selectedCount={selectedOrders.size}
               isDark={isDark}
               onCompleteSelected={async () => {
-                if (
-                  confirm(
-                    `آیا می‌خواهید ${selectedOrders.size} سفارش را تکمیل کنید؟`
-                  )
-                ) {
-                  for (const orderId of selectedOrders) {
-                    await handleOrderStatusChange(orderId, "completed");
-                  }
-                  setSelectedOrders(new Set());
+                const count = selectedOrders.size;
+                const ok = await confirm({
+                  title: "تکمیل سفارش‌ها",
+                  message: `آیا می‌خواهید ${count} سفارش را تکمیل کنید؟`,
+                  confirmLabel: "تکمیل",
+                });
+                if (!ok) return;
+                for (const orderId of selectedOrders) {
+                  await handleOrderStatusChange(orderId, "completed");
                 }
+                setSelectedOrders(new Set());
+                success(`${count} سفارش تکمیل شد`);
               }}
               onCancelSelected={async () => {
-                if (
-                  confirm(
-                    `آیا می‌خواهید ${selectedOrders.size} سفارش را لغو کنید؟`
-                  )
-                ) {
-                  for (const orderId of selectedOrders) {
-                    await handleOrderStatusChange(orderId, "cancelled");
-                  }
-                  setSelectedOrders(new Set());
+                const count = selectedOrders.size;
+                const ok = await confirm({
+                  title: "لغو سفارش‌ها",
+                  message: `آیا می‌خواهید ${count} سفارش را لغو کنید؟`,
+                  confirmLabel: "لغو سفارش‌ها",
+                  variant: "destructive",
+                });
+                if (!ok) return;
+                for (const orderId of selectedOrders) {
+                  await handleOrderStatusChange(orderId, "cancelled");
                 }
+                setSelectedOrders(new Set());
+                success(`${count} سفارش لغو شد`);
               }}
               onClearSelection={() => setSelectedOrders(new Set())}
             />
@@ -1104,7 +1170,7 @@ export default function AdminPage() {
                   await updateItem(itemId, { is_pinned: isPinned } as any);
                 } catch (err) {
                   console.error("Failed to toggle pin:", err);
-                  alert("خطا در تغییر وضعیت ثابت کردن");
+                  showError("خطا در تغییر وضعیت ثابت کردن");
                 }
               }}
               onToggleSuggest={async (
@@ -1117,7 +1183,7 @@ export default function AdminPage() {
                   } as any);
                 } catch (err) {
                   console.error("Failed to toggle suggest:", err);
-                  alert("خطا در تغییر وضعیت پیشنهاد");
+                  showError("خطا در تغییر وضعیت پیشنهاد");
                 }
               }}
               onReorder={async (
@@ -1138,20 +1204,20 @@ export default function AdminPage() {
                     body: JSON.stringify({ itemOrders })
                   });
                   if (response.ok) {
-                    alert("ترتیب آیتم‌ها با موفقیت تغییر کرد");
+                    success("ترتیب آیتم‌ها با موفقیت تغییر کرد");
                   } else {
                     throw new Error("Failed to reorder");
                   }
                 } catch (err) {
                   console.error("Failed to reorder items:", err);
-                  alert("خطا در تغییر ترتیب آیتم‌ها");
+                  showError("خطا در تغییر ترتیب آیتم‌ها");
                 }
               }}
               isDark={isDark}
             />
 
             <Dialog
-              open={showMenuForm || !!menuItems.editingItem}
+              open={(showMenuForm || !!menuItems.editingItem) && !showIngredientModal}
               onOpenChange={open => {
                 if (!open) {
                   menuItems.handleCancel();
@@ -1334,7 +1400,14 @@ export default function AdminPage() {
                         isDark ? "text-white" : "text-gray-900"
                       }`}
                     >
-                      دسته
+                      دسته‌بندی
+                    </th>
+                    <th
+                      className={`text-right px-6 py-4 font-bold ${
+                        isDark ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      زیردسته
                     </th>
                     <th
                       className={`text-right px-6 py-4 font-bold ${
@@ -1384,7 +1457,7 @@ export default function AdminPage() {
                   {products.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className={`px-6 py-12 text-center ${
                           isDark ? "text-gray-500" : "text-gray-400"
                         }`}
@@ -1420,6 +1493,15 @@ export default function AdminPage() {
                           }`}
                         >
                           {product.name}
+                        </td>
+                        <td
+                          className={`px-6 py-4 text-sm max-w-[180px] ${
+                            isDark ? "text-gray-400" : "text-gray-600"
+                          }`}
+                        >
+                          <span className="line-clamp-2" title={product.categoryGroup || ""}>
+                            {product.categoryGroup || "—"}
+                          </span>
                         </td>
                         <td
                           className={`px-6 py-4 text-sm ${
@@ -1471,7 +1553,16 @@ export default function AdminPage() {
                         >
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleViewLogs(product.id)}
+                              onClick={() => openInventoryTransaction(product)}
+                              className="p-1 hover:bg-emerald-500/20 rounded transition"
+                              title="عملیات موجودی"
+                            >
+                              <PackagePlus size={18} className="text-emerald-500" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleViewLogs(product.id, product.name, product.unit)
+                              }
                               className="p-1 hover:bg-blue-500/20 rounded transition"
                               title="تاریخچه"
                             >
@@ -1630,12 +1721,24 @@ export default function AdminPage() {
       <DashboardSidebar
         isDark={isDark}
         userRole={userRole}
+        allowedPages={sidebarAllowedPages}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         isMobileOpen={sidebarMobileOpen}
         onMobileOpen={() => setSidebarMobileOpen(true)}
         onMobileClose={() => setSidebarMobileOpen(false)}
         pendingOrdersCount={pendingOrdersCount}
+        userName={userDisplayName}
+        userRoleLabel={
+          userType === "staff" ? userRoleKey : userRoleKey || userRole
+        }
+        userEmail={userEmail}
+        userType={userType}
+        canAccessSiteSettings={userRole === "super_admin"}
+        onNavigate={page => {
+          setSidebarMobileOpen(false);
+          navigateToPage(page);
+        }}
       />
 
       {/* Main Content — full width on mobile since sidebar is an overlay */}
@@ -1649,12 +1752,9 @@ export default function AdminPage() {
         >
           <DashboardHeader
             isDark={isDark}
-            activePage={activePage}
             onLogout={handleLogout}
             onToggleTheme={toggleTheme}
             pendingOrdersCount={pendingOrdersCount}
-            userName={userDisplayName}
-            userRole={userRoleKey || userRole}
             onNavigate={navigateToPage}
             onGlobalSearch={query => {
               navigateToPage("orders");
@@ -1662,7 +1762,6 @@ export default function AdminPage() {
               setOrdersPage(1);
             }}
             quickActions={getHeaderQuickActions()}
-            onMenuToggle={() => setSidebarMobileOpen(true)}
           />
         </div>
 
@@ -1671,6 +1770,8 @@ export default function AdminPage() {
           className={cn("flex-1 overflow-y-auto", adminContentBg(isDark))}
         >
           <div className="max-w-7xl mx-auto px-5 py-6">
+            <AdminPageBreadcrumb activePage={activePage} isDark={isDark} />
+            <AdminPageTitle activePage={activePage} isDark={isDark} />
             {renderPageContent()}
           </div>
         </div>
@@ -1694,7 +1795,7 @@ export default function AdminPage() {
 
               if (response.ok) {
                 await response.json();
-                alert("سفارش دستی با موفقیت ثبت شد");
+                success("سفارش دستی با موفقیت ثبت شد");
                 setShowManualOrderForm(false);
 
                 // Switch to customer-orders page to show the new order immediately
@@ -1716,11 +1817,11 @@ export default function AdminPage() {
                 }
               } else {
                 const error = await response.json().catch(() => ({}));
-                alert(`خطا در ثبت سفارش: ${error.error || "Unknown error"}`);
+                showError(`خطا در ثبت سفارش: ${error.error || "Unknown error"}`);
               }
             } catch (error) {
               console.error(error);
-              alert("خطا در ثبت سفارش");
+              showError("خطا در ثبت سفارش");
             }
           }}
           onClose={() => setShowManualOrderForm(false)}
@@ -1735,6 +1836,11 @@ export default function AdminPage() {
             setShowNewProductForm(false);
             setSelectedProduct(null);
           }}
+          onOpenTransaction={
+            selectedProduct?.id
+              ? () => openInventoryTransaction(selectedProduct)
+              : undefined
+          }
           onSave={async product => {
             if (selectedProduct) {
               // Edit mode
@@ -1759,15 +1865,17 @@ export default function AdminPage() {
       )}
 
       {/* Inventory Logs Modal */}
-      {showLogsModal && selectedProduct && (
+      {showLogsModal && (
         <InventoryLogsModal
           isOpen={showLogsModal}
           onClose={() => {
             setShowLogsModal(false);
             setSelectedProductLogs([]);
+            setLogsProductName("");
           }}
           logs={selectedProductLogs}
-          productName={selectedProduct.name}
+          productName={logsProductName}
+          productUnit={logsProductUnit}
           isDark={isDark}
         />
       )}
@@ -1800,8 +1908,8 @@ export default function AdminPage() {
         showTimeline={true}
       />
 
-      {/* Stock Adjustment Modal */}
-      <StockAdjustmentModal
+      {/* Inventory Transaction Modal */}
+      <InventoryTransactionModal
         isOpen={showStockAdjustment}
         product={adjustmentProduct}
         isDark={isDark}
@@ -1809,7 +1917,7 @@ export default function AdminPage() {
           setShowStockAdjustment(false);
           setAdjustmentProduct(null);
         }}
-        onSave={handleStockAdjustment}
+        onSave={handleInventoryTransaction}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 
 // PATCH update customer
 export async function PATCH(
@@ -8,8 +8,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const authErr = ensureAdmin(request);
-    if (authErr) return authErr;
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const { name } = await request.json();

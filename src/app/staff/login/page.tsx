@@ -9,17 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 
 export default function StaffLoginPage() {
   const router = useRouter();
+  const { error: showError } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
     try {
@@ -41,11 +41,11 @@ export default function StaffLoginPage() {
         }
         router.push("/staff/panel");
       } else {
-        setError(data.error || "خطا در ورود");
+        showError(data.error || "خطا در ورود");
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("خطا در ارتباط با سرور");
+      showError("خطا در ارتباط با سرور");
     } finally {
       setLoading(false);
     }
@@ -110,12 +110,6 @@ export default function StaffLoginPage() {
                   رمز عبور خود را فراموش کردید؟
                 </Link>
               </div>
-
-              {error && (
-                <div className="p-3 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
 
               <Button
                 type="submit"

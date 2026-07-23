@@ -4,7 +4,8 @@ import {
   getUserByEmail,
   createSession
 } from "@/lib/authService";
-import { setAuthCookie } from "@/lib/authMiddleware";
+import { setAuthCookie, clearAuthCookie } from "@/lib/authMiddleware";
+import { clearStaffAuthCookie } from "@/lib/staffAuthMiddleware";
 import { getDatabase } from "@/lib/database";
 import { getStaffByEmail, verifyStaffPassword, createStaffSession } from "@/lib/staffAuth";
 
@@ -60,8 +61,9 @@ export async function POST(request: NextRequest) {
           { status: 200 }
         );
 
-        // Set secure session cookie
+        // Set secure session cookie; clear any stale staff session
         const finalResponse = setAuthCookie(response, token);
+        clearStaffAuthCookie(finalResponse);
         return finalResponse;
       }
     }
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest) {
             { status: 200 }
           );
 
-          // Set staff cookie
+          // Set staff cookie; clear any stale admin session
           response.cookies.set("staff_token", session.token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -113,6 +115,7 @@ export async function POST(request: NextRequest) {
             path: "/",
           });
 
+          clearAuthCookie(response);
           return response;
         }
       }

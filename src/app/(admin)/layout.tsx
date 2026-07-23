@@ -14,17 +14,17 @@ export default function AdminLayout({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Wait for auth check to complete before making decision
     if (!authChecked) return;
 
-    console.log(isAuthenticated);
     if (!isAuthenticated) {
-      router.push("/login");
+      setIsLoading(true);
+      router.replace("/login");
+      return;
     }
+
     setIsLoading(false);
   }, [authChecked, isAuthenticated, router]);
 
-  // Show loading while auth is being checked
   if (!authChecked || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center dark:bg-neutral-950 bg-primary-500">

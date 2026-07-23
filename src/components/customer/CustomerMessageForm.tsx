@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 import { useCustomer } from "@/context/CustomerContext";
 
 interface CustomerMessageFormProps {
@@ -23,27 +24,26 @@ const CustomerMessageForm: React.FC<CustomerMessageFormProps> = ({
   existingTickets = [],
 }) => {
   const { customer, isAuthenticated } = useCustomer();
+  const { success, error: showError, warning } = useToast();
   const [subject, setSubject] = useState(defaultSubject);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [useExistingTicket, setUseExistingTicket] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!isAuthenticated) {
-      alert("برای ارسال پیام باید وارد شوید.");
+      warning("برای ارسال پیام باید وارد شوید.");
       return;
     }
 
     if (!message.trim()) {
-      setError("پیام الزامی است");
+      warning("پیام الزامی است");
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const response = await fetch("/api/customer-messages", {
@@ -59,17 +59,17 @@ const CustomerMessageForm: React.FC<CustomerMessageFormProps> = ({
       });
 
       if (response.ok) {
-        alert("پیام شما با موفقیت ارسال شد. در اسرع وقت پاسخ داده خواهد شد.");
+        success("پیام شما با موفقیت ارسال شد. در اسرع وقت پاسخ داده خواهد شد.");
         setSubject("");
         setMessage("");
         if (onSuccess) onSuccess();
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "خطا در ارسال پیام");
+        showError(errorData.error || "خطا در ارسال پیام");
       }
     } catch (err: any) {
       console.error("Error sending message:", err);
-      setError("خطا در ارسال پیام");
+      showError("خطا در ارسال پیام");
     } finally {
       setLoading(false);
     }
@@ -184,12 +184,6 @@ const CustomerMessageForm: React.FC<CustomerMessageFormProps> = ({
           )}
         />
       </div>
-
-      {error && (
-        <div className={cn("text-sm p-2 rounded", isDark ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-600")}>
-          {error}
-        </div>
-      )}
 
       <Button
         type="submit"

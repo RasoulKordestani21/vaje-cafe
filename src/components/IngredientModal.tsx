@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 
 import { X, Plus, Trash2 } from "lucide-react";
+import { adminFetchInit } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
 
 // Removed unused import: formatToman
 
@@ -65,6 +67,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
   isDark
 }) => {
+  const { success, error: showError, warning } = useToast();
   const [ingredients, setIngredients] =
     useState<Ingredient[]>(Array.isArray(existingIngredients) ? existingIngredients : []);
   const [originalIngredients, setOriginalIngredients] = useState<Ingredient[]>(
@@ -85,7 +88,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
   // Fetch products - only raw_material type for ingredients
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch("/api/products?type=raw_material");
+      const res = await fetch("/api/products?type=raw_material", adminFetchInit());
 
       if (res.ok) {
         const products = await res.json();
@@ -109,7 +112,10 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
   const fetchExistingIngredients = useCallback(async () => {
     try {
-      const res = await fetch(`/api/menu-items/${menuItemId}/ingredients`);
+      const res = await fetch(
+        `/api/menu-items/${menuItemId}/ingredients`,
+        adminFetchInit()
+      );
 
       if (res.ok) {
         const response = await res.json();
@@ -160,7 +166,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
   const handleAddIngredient = () => {
     if (!selectedProductId || !quantity || !unit) {
-      alert("لطفا همه فیلدها را پر کنید");
+      warning("لطفا همه فیلدها را پر کنید");
 
       return;
     }
@@ -171,7 +177,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
 
     // Check if already added
     if (Array.isArray(ingredients) && ingredients.some(i => i.productId === selectedProductId)) {
-      alert("این ماده اولیه قبلا اضافه شده است");
+      warning("این ماده اولیه قبلا اضافه شده است");
 
       return;
     }
@@ -216,7 +222,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
           if (!stillExists) {
             await fetch(
               `/api/menu-items/${menuItemId}/ingredients?ingredientId=${originalIng.id}`,
-              { method: "DELETE" }
+              { method: "DELETE", ...adminFetchInit() }
             );
           }
         }
@@ -234,8 +240,12 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
           
           const res = await fetch(`/api/menu-items/${menuItemId}/ingredients`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            ...adminFetchInit(),
+            headers: {
+              ...(adminFetchInit().headers as Record<string, string>),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
           });
 
           if (!res.ok) {
@@ -246,11 +256,11 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
       }
 
       onSave(ingredients);
-      alert("مواد اولیه با موفقیت ذخیره شد");
+      success("مواد اولیه با موفقیت ذخیره شد");
       onClose();
     } catch (error) {
       console.error("Failed to save ingredients:", error);
-      alert("خطا در ذخیره مواد اولیه");
+      showError("خطا در ذخیره مواد اولیه");
     } finally {
       setLoading(false);
     }
@@ -269,7 +279,7 @@ export const IngredientModal: React.FC<IngredientModalProps> = ({
   const inputBorderClass = isDark ? "border-white/20" : "border-gray-300";
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[100]">
       <div
         className={`${bgClass} rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border ${borderClass}`}
       >

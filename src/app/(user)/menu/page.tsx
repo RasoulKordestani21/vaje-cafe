@@ -7,6 +7,7 @@ import { useCustomer } from "@/context/CustomerContext";
 import { useCart } from "@/context/CartContext";
 import { ThemeContext } from "@/app/providers";
 import { CATEGORIES, MenuItem } from "@/types";
+import { menuItemMatchesCategory } from "@/constants/menuCategories";
 import { formatToman } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import {
@@ -19,12 +20,12 @@ import RatingSystem from "@/components/ratings/RatingSystem";
 
 // ─── Category icons ────────────────────────────────────────────────────────────
 const CAT_ICONS: Record<string, string> = {
-  "همه":           "☕",
-  "اسپرسو":        "☕",
-  "قهوه دمی":      "🫖",
-  "نوشیدنی سرد":   "🧊",
-  "نوشیدنی خاص":   "🥤",
-  "کیک و دسر":     "🍰",
+  "همه": "☕",
+  "نوشیدنی‌های گرم (Hot Beverages)": "☕",
+  "نوشیدنی‌های سرد (Cold Beverages)": "🧊",
+  "غذا و میان‌وعده (Food)": "🥪",
+  "دسر و شیرینی (Desserts)": "🍰",
+  "محصولات بسته‌بندی (Retail Products)": "📦",
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -53,7 +54,7 @@ export default function MenuPage() {
   // ── Filtering ──────────────────────────────────────────────────────────────
   const byCategory = activeCategory === "همه"
     ? items
-    : items.filter(i => i.category === activeCategory);
+    : items.filter(i => menuItemMatchesCategory(i.category, activeCategory));
 
   const bySearch = searchQuery.trim()
     ? byCategory.filter(i => {
@@ -80,7 +81,11 @@ export default function MenuPage() {
     cb();
   };
 
-  const handleAdd = (id: string) => requireAuth(() => addToCart(id, 1));
+  const handleAdd = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item && item.inStockFromInventory === false) return;
+    requireAuth(() => addToCart(id, 1));
+  };
 
   const getQty = (id: string) => cartItems.find(ci => ci.itemId === id)?.quantity ?? 0;
 
@@ -106,8 +111,8 @@ export default function MenuPage() {
       setTableNumber("");
       setNotes("");
       setTimeout(() => { setShowCart(false); setOrderSuccess(false); }, 2500);
-    } catch {
-      setFormError("خطا در ثبت سفارش. دوباره تلاش کنید.");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "خطا در ثبت سفارش. دوباره تلاش کنید.");
     } finally {
       setSubmitting(false);
     }
@@ -603,11 +608,13 @@ function MenuCard({
   qty: number; onAdd: () => void;
 }) {
   const imgSrc = item.imageUrl || `https://picsum.photos/300/300?random=${item.id}`;
+  const outOfInventory = item.inStockFromInventory === false;
 
   return (
     <div className={cn(
       "group flex flex-col rounded-2xl border overflow-hidden transition-all duration-200",
       "hover:-translate-y-0.5 hover:shadow-lg",
+      outOfInventory && "opacity-75",
       surface, border
     )}>
       {/* image */}
@@ -615,9 +622,17 @@ function MenuCard({
         <img
           src={imgSrc}
           alt={item.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className={cn(
+            "w-full h-full object-cover transition-transform duration-500 group-hover:scale-105",
+            outOfInventory && "grayscale"
+          )}
           onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/300/300?random=${item.id}`; }}
         />
+        {outOfInventory && (
+          <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
+            عدم موجودی
+          </span>
+        )}
         {/* badge */}
         {item.is_pinned ? (
           <span className="absolute top-2 right-2 bg-[#186244] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
@@ -658,17 +673,23 @@ function MenuCard({
           <span className="text-xs font-bold text-[#186244]">
             {formatToman(item.price)}
           </span>
-          <button
-            onClick={onAdd}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white transition-all",
-              "bg-[#186244] hover:bg-[#1f7a56] active:scale-95",
-              qty > 0 && "pr-2"
-            )}
-          >
-            {qty > 0 && <span className="font-bold">{qty}×</span>}
-            <Plus size={13} />
-          </button>
+          {outOfInventory ? (
+            <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full", mutedbg, muted)}>
+              ناموجود
+            </span>
+          ) : (
+            <button
+              onClick={onAdd}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white transition-all",
+                "bg-[#186244] hover:bg-[#1f7a56] active:scale-95",
+                qty > 0 && "pr-2"
+              )}
+            >
+              {qty > 0 && <span className="font-bold">{qty}×</span>}
+              <Plus size={13} />
+            </button>
+          )}
         </div>
       </div>
     </div>

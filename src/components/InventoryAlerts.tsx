@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AlertTriangle, Package, DollarSign, TrendingDown, ShoppingCart, Building2 } from "lucide-react";
 import { formatToman, toPersianDigits } from "@/utils/format";
+import { adminFetchInit } from "@/services/dbService";
 
 interface InventoryAlert {
   productId: string;
@@ -63,11 +64,7 @@ export default function InventoryAlerts({ isDark = true }: InventoryAlertsProps)
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const res = await fetch("/api/inventory/alerts", {
-          headers: {
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-          }
-        });
+        const res = await fetch("/api/inventory/alerts", adminFetchInit());
         if (res.ok) {
           const data = await res.json();
           setAlerts(data.alerts || []);

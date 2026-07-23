@@ -24,6 +24,16 @@ export const getAuthHeaders = (): HeadersInit => {
   return {};
 };
 
+/** credentials + x-access-token — use on all dashboard admin fetch calls */
+export const adminFetchInit = (init?: RequestInit): RequestInit => ({
+  credentials: "include",
+  ...init,
+  headers: {
+    ...getAuthHeaders(),
+    ...(init?.headers as Record<string, string> | undefined),
+  },
+});
+
 // --- MENU OPERATIONS ---
 
 export const getMenuItems = async (): Promise<MenuItem[]> => {
@@ -175,12 +185,43 @@ export const subscribeToOrders = (
 
   const fetchAndCallback = async () => {
     try {
-      const res = await fetch(`${API_BASE}/orders`);
+      const res = await fetch(`${API_BASE}/orders`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return;
       const orders = (await res.json()) as Order[];
       if (mounted) callback(orders);
     } catch (e) {
       console.error("subscribeToOrders error:", e);
+    }
+  };
+
+  fetchAndCallback();
+  const id = setInterval(fetchAndCallback, intervalMs);
+
+  return () => {
+    mounted = false;
+    clearInterval(id);
+  };
+};
+
+export const subscribeToStaffOrders = (
+  callback: (orders: Order[]) => void,
+  intervalMs = 15_000
+) => {
+  let mounted = true;
+
+  const fetchAndCallback = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/staff/orders`, {
+        credentials: "include"
+      });
+      if (!res.ok) return;
+      const orders = (await res.json()) as Order[];
+      if (mounted) callback(orders);
+    } catch (e) {
+      console.error("subscribeToStaffOrders error:", e);
     }
   };
 
@@ -236,8 +277,9 @@ export const updateOrderStatusInDB = async (
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
+        ...getAuthHeaders(),
       },
+      credentials: "include",
       body: JSON.stringify({ status })
     });
 
@@ -247,6 +289,28 @@ export const updateOrderStatusInDB = async (
     }
   } catch (error) {
     console.error("Error updating order status:", error);
+    throw error;
+  }
+};
+
+export const updateStaffOrderStatusInDB = async (
+  id: string,
+  status: string
+): Promise<void> => {
+  try {
+    const res = await fetch(`${API_BASE}/staff/orders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to update order status");
+    }
+  } catch (error) {
+    console.error("Error updating staff order status:", error);
     throw error;
   }
 };

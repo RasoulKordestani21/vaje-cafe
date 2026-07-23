@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { adminFetchInit } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
 
 interface LowStockAlert {
   productId: string;
@@ -44,6 +46,7 @@ interface UseInventoryReturn {
 }
 
 export const useInventory = (): UseInventoryReturn => {
+  const { error: showError } = useToast();
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [inventoryValue, setInventoryValue] = useState<InventoryValue | null>(null);
   const [restockRecommendations, setRestockRecommendations] = useState<RestockRecommendation[]>([]);
@@ -58,26 +61,10 @@ export const useInventory = (): UseInventoryReturn => {
 
       // Fetch all inventory data in parallel
       const [alertsRes, valueRes, restockRes, suppliersRes] = await Promise.all([
-        fetch("/api/inventory/alerts", {
-          headers: {
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-          }
-        }),
-        fetch("/api/inventory/value", {
-          headers: {
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-          }
-        }),
-        fetch("/api/inventory/restock-recommendations", {
-          headers: {
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-          }
-        }),
-        fetch("/api/inventory/suppliers", {
-          headers: {
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-          }
-        })
+        fetch("/api/inventory/alerts", adminFetchInit()),
+        fetch("/api/inventory/value", adminFetchInit()),
+        fetch("/api/inventory/restock-recommendations", adminFetchInit()),
+        fetch("/api/inventory/suppliers", adminFetchInit()),
       ]);
 
       if (alertsRes.ok) {
@@ -101,7 +88,9 @@ export const useInventory = (): UseInventoryReturn => {
       }
     } catch (err) {
       console.error("Failed to fetch inventory data:", err);
-      setError("خطا در دریافت اطلاعات موجودی");
+      const message = "خطا در دریافت اطلاعات موجودی";
+      setError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }

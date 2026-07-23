@@ -1,22 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import { v4 as uuidv4 } from "uuid";
+import {
+  DAY_NAMES_FA,
+  formatTimestampTehranFa,
+  getTehranNowParts,
+  isManualClosureActive,
+  isTimeWithinRange,
+  normalizeTime,
+} from "@/utils/workingHoursUtils";
 
 initializeDatabase();
 
-// GET all working hours
-export async function GET(request: NextRequest) {
+function normalizeWorkingHourRow(hour: Record<string, unknown>) {
+  return {
+    ...hour,
+    open_time: normalizeTime(String(hour.open_time || "09:00")),
+    close_time: normalizeTime(String(hour.close_time || "23:00")),
+  };
+}
+
+export async function GET() {
   try {
     const db = getDatabase();
-    const hours = db.prepare("SELECT * FROM working_hours ORDER BY day_of_week").all();
-    
-    // Also get site status override
-    const siteStatus = db.prepare("SELECT * FROM site_status LIMIT 1").get() as any;
+    const hours = db
+      .prepare("SELECT * FROM working_hours ORDER BY day_of_week")
+      .all()
+      .map((hour) => normalizeWorkingHourRow(hour as Record<string, unknown>));
 
-    return NextResponse.json({ 
+    const siteStatus = db.prepare("SELECT * FROM site_status LIMIT 1").get() as
+      | Record<string, unknown>
+      | undefined;
+
+    return NextResponse.json({
       workingHours: hours,
-      siteStatus: siteStatus || { is_manually_closed: false }
+      siteStatus: siteStatus || { is_manually_closed: false },
     });
   } catch (error) {
     console.error("Working hours GET error:", error);
@@ -27,21 +46,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PUT update working hours (bulk update)
 export async function PUT(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can update working hours
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const { workingHours, siteStatus } = body;
@@ -49,7 +57,6 @@ export async function PUT(request: NextRequest) {
     const db = getDatabase();
     const now = Math.floor(Date.now() / 1000);
 
-    // Update working hours
     if (workingHours && Array.isArray(workingHours)) {
       const updateStmt = db.prepare(`
         UPDATE working_hours 
@@ -61,8 +68,8 @@ export async function PUT(request: NextRequest) {
         const { day_of_week, open_time, close_time, is_closed } = hour;
         if (day_of_week !== undefined && day_of_week >= 0 && day_of_week <= 6) {
           updateStmt.run(
-            open_time || "09:00",
-            close_time || "23:00",
+            normalizeTime(open_time || "09:00"),
+            normalizeTime(close_time || "23:00"),
             is_closed ? 1 : 0,
             now,
             day_of_week
@@ -71,34 +78,49 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Update site status override
     if (siteStatus !== undefined) {
-      const existing = db.prepare("SELECT id FROM site_status LIMIT 1").get() as { id: string } | undefined;
-      
+      const existing = db.prepare("SELECT id FROM site_status LIMIT 1").get() as
+        | { id: string }
+        | undefined;
+      const isManuallyClosed = siteStatus.is_manually_closed ? 1 : 0;
+      let closedFrom = siteStatus.closed_from || null;
+      let closedUntil = siteStatus.closed_until || null;
+
+      if (isManuallyClosed && !closedFrom) {
+        closedFrom = now;
+      }
+
+      if (!isManuallyClosed) {
+        closedFrom = null;
+        closedUntil = null;
+      }
+
       if (existing) {
         db.prepare(`
           UPDATE site_status 
-          SET is_manually_closed = ?, closed_until = ?, reason = ?, updatedAt = ?, updatedBy = ?
+          SET is_manually_closed = ?, closed_from = ?, closed_until = ?, reason = ?, updatedAt = ?, updatedBy = ?
           WHERE id = ?
         `).run(
-          siteStatus.is_manually_closed ? 1 : 0,
-          siteStatus.closed_until || null,
-          siteStatus.reason || null,
+          isManuallyClosed,
+          closedFrom,
+          closedUntil,
+          isManuallyClosed ? siteStatus.reason || null : null,
           now,
-          user.id,
+          auth.userId,
           existing.id
         );
       } else {
         db.prepare(`
-          INSERT INTO site_status (id, is_manually_closed, closed_until, reason, updatedAt, updatedBy)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO site_status (id, is_manually_closed, closed_from, closed_until, reason, updatedAt, updatedBy)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(
           uuidv4(),
-          siteStatus.is_manually_closed ? 1 : 0,
-          siteStatus.closed_until || null,
-          siteStatus.reason || null,
+          isManuallyClosed,
+          closedFrom,
+          closedUntil,
+          isManuallyClosed ? siteStatus.reason || null : null,
           now,
-          user.id
+          auth.userId
         );
       }
     }
@@ -113,58 +135,75 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// GET current site status (public endpoint)
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const db = getDatabase();
     const now = Math.floor(Date.now() / 1000);
-    const currentDate = new Date();
-    const currentDay = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
-    const currentTime = currentDate.toTimeString().slice(0, 5); // HH:MM format
+    const { currentDay, currentTime } = getTehranNowParts();
 
-    // Get site status override
-    const siteStatus = db.prepare("SELECT * FROM site_status LIMIT 1").get() as any;
+    const siteStatus = db.prepare("SELECT * FROM site_status LIMIT 1").get() as {
+      is_manually_closed?: number;
+      closed_from?: number | null;
+      closed_until?: number | null;
+      reason?: string | null;
+    } | undefined;
+
     const isManuallyClosed = siteStatus?.is_manually_closed === 1;
+    const closedFrom = siteStatus?.closed_from ?? null;
+    const closedUntil = siteStatus?.closed_until ?? null;
 
-    if (isManuallyClosed) {
-      const closedUntil = siteStatus.closed_until;
-      if (closedUntil && closedUntil > now) {
-        return NextResponse.json({
-          isOpen: false,
-          reason: siteStatus.reason || "کافه به صورت دستی بسته شده است",
-          closedUntil: closedUntil
-        });
-      } else if (!closedUntil) {
-        return NextResponse.json({
-          isOpen: false,
-          reason: siteStatus.reason || "کافه به صورت دستی بسته شده است"
-        });
-      }
+    if (isManualClosureActive(isManuallyClosed, closedFrom, closedUntil, now)) {
+      const fromFormatted = closedFrom
+        ? formatTimestampTehranFa(closedFrom)
+        : formatTimestampTehranFa(now);
+      const toFormatted = closedUntil ? formatTimestampTehranFa(closedUntil) : null;
+
+      return NextResponse.json({
+        isOpen: false,
+        reason: siteStatus?.reason || "کافه به صورت دستی بسته شده است",
+        closedUntil,
+        closedFrom,
+        manualClosure: {
+          from: fromFormatted,
+          to: toFormatted,
+        },
+      });
     }
 
-    // Get working hours for current day
-    const todayHours = db.prepare("SELECT * FROM working_hours WHERE day_of_week = ?").get(currentDay) as any;
+    const todayHours = db
+      .prepare("SELECT * FROM working_hours WHERE day_of_week = ?")
+      .get(currentDay) as {
+      open_time?: string;
+      close_time?: string;
+      is_closed?: number;
+    } | undefined;
 
     if (!todayHours || todayHours.is_closed === 1) {
       return NextResponse.json({
         isOpen: false,
-        reason: "کافه امروز تعطیل است"
+        reason: "کافه امروز تعطیل است",
+        day: {
+          index: currentDay,
+          name: DAY_NAMES_FA[currentDay] || "",
+        },
       });
     }
 
-    // Check if current time is within working hours
-    const openTime = todayHours.open_time;
-    const closeTime = todayHours.close_time;
-
-    const isOpen = currentTime >= openTime && currentTime <= closeTime;
+    const openTime = normalizeTime(todayHours.open_time || "09:00");
+    const closeTime = normalizeTime(todayHours.close_time || "23:00");
+    const isOpen = isTimeWithinRange(currentTime, openTime, closeTime);
 
     return NextResponse.json({
       isOpen,
       reason: isOpen ? null : `ساعات کاری: ${openTime} - ${closeTime}`,
+      day: {
+        index: currentDay,
+        name: DAY_NAMES_FA[currentDay] || "",
+      },
       workingHours: {
         open: openTime,
-        close: closeTime
-      }
+        close: closeTime,
+      },
     });
   } catch (error) {
     console.error("Site status check error:", error);
@@ -174,4 +213,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

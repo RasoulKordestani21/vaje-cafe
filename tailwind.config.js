@@ -15,8 +15,8 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ["var(--font-family)", "sans-serif"],
-        serif: ["var(--font-family)", "serif"]
+        sans: ["var(--font-vazirmatn)", "Tahoma", "Arial", "sans-serif"],
+        serif: ["var(--font-vazirmatn)", "Tahoma", "Arial", "serif"]
       },
       fontSize: {
         xs:   "var(--font-size-xs)",

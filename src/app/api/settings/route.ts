@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import { v4 as uuidv4 } from "uuid";
 
 initializeDatabase();
@@ -8,18 +8,8 @@ initializeDatabase();
 // GET all site settings
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can view settings
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const settings = db.prepare("SELECT * FROM site_settings ORDER BY key").all();
@@ -37,18 +27,8 @@ export async function GET(request: NextRequest) {
 // PUT update site settings (bulk update)
 export async function PUT(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can update settings
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const { settings } = body;
@@ -83,9 +63,9 @@ export async function PUT(request: NextRequest) {
       const existing = db.prepare("SELECT id FROM site_settings WHERE key = ?").get(key) as { id: string } | undefined;
       
       if (existing) {
-        updateStmt.run(value || null, now, user.id, key);
+        updateStmt.run(value || null, now, auth.userId, key);
       } else {
-        insertStmt.run(uuidv4(), key, value || null, type, description || null, now, user.id);
+        insertStmt.run(uuidv4(), key, value || null, type, description || null, now, auth.userId);
       }
 
       // Check if any theme settings were updated

@@ -5,6 +5,9 @@ import { MenuProvider } from "@/context/MenuContext";
 import { CustomerProvider } from "@/context/CustomerContext";
 import { CartProvider } from "@/context/CartContext";
 import { ThemeConfigProvider } from "@/context/ThemeContext";
+import { SiteSettingsProvider } from "@/context/SiteSettingsContext";
+import { ToastProvider } from "@/components/ui/toast";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -44,32 +47,44 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   // IMPORTANT: always render providers so children that call hooks are never mounted outside the provider.
   if (!mounted) {
     return (
-      <ThemeConfigProvider>
-        <CustomerProvider>
-          <CartProvider>
-            <MenuProvider>
-              <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-                {children}
-              </ThemeContext.Provider>
-            </MenuProvider>
-          </CartProvider>
-        </CustomerProvider>
-      </ThemeConfigProvider>
+      <ToastProvider>
+        <ConfirmProvider>
+          <ThemeConfigProvider>
+            <SiteSettingsProvider>
+              <CustomerProvider>
+                <CartProvider>
+                  <MenuProvider>
+                    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+                      {children}
+                    </ThemeContext.Provider>
+                  </MenuProvider>
+                </CartProvider>
+              </CustomerProvider>
+            </SiteSettingsProvider>
+          </ThemeConfigProvider>
+        </ConfirmProvider>
+      </ToastProvider>
     );
   }
 
   return (
-    <ThemeConfigProvider>
-      <CustomerProvider>
-        <CartProvider>
-          <MenuProvider>
-            <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-              {children}
-            </ThemeContext.Provider>
-          </MenuProvider>
-        </CartProvider>
-      </CustomerProvider>
-    </ThemeConfigProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <ThemeConfigProvider>
+          <SiteSettingsProvider>
+            <CustomerProvider>
+              <CartProvider>
+                <MenuProvider>
+                  <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+                    {children}
+                  </ThemeContext.Provider>
+                </MenuProvider>
+              </CartProvider>
+            </CustomerProvider>
+          </SiteSettingsProvider>
+        </ThemeConfigProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }
 

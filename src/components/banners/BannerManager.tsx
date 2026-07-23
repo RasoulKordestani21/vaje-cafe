@@ -23,9 +23,13 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { adminFetchInit } from "@/services/dbService";
 import { toPersianDigits } from "@/utils/format";
 import ScrollingJalaliDatePicker from "@/components/ScrollingJalaliDatePicker";
-import { jalaliToTimestamp, timestampToJalali } from "@/utils/jalaliDateUtils";
+import ScrollingTimePicker from "@/components/ScrollingTimePicker";
+import { formatJalaliDate, jalaliToTimestamp, timestampToJalali } from "@/utils/jalaliDateUtils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface Banner {
   id: string;
@@ -46,6 +50,8 @@ interface BannerManagerProps {
 }
 
 const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
+  const { success, error: showError, warning } = useToast();
+  const confirm = useConfirm();
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -63,7 +69,6 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBanners();
@@ -78,7 +83,7 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
       setBanners(data.banners || []);
     } catch (err: any) {
       console.error("Error fetching banners:", err);
-      setError(err.message);
+      showError(err.message || "خطا در بارگذاری بنرها");
     } finally {
       setLoading(false);
     }
@@ -95,8 +100,8 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
         type: banner.type,
         start_date: startDate,
         end_date: endDate,
-        start_time: "00:00",
-        end_time: "23:59",
+        start_time: banner.start_date ? timestampToTime(banner.start_date) : "00:00",
+        end_time: banner.end_date ? timestampToTime(banner.end_date) : "23:59",
         is_active: banner.is_active === 1,
         priority: banner.priority,
       });
@@ -116,7 +121,6 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
     }
     setImageFile(null);
     setIsDialogOpen(true);
-    setError(null);
   };
 
   const handleImageUpload = async (): Promise<string | null> => {
@@ -124,7 +128,6 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
 
     try {
       setUploadingImage(true);
-      setError(null);
 
       const uploadFormData = new FormData();
       uploadFormData.append("image", imageFile);
@@ -132,7 +135,8 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
 
       const response = await fetch("/api/settings/upload-image", {
         method: "POST",
-        body: uploadFormData
+        ...adminFetchInit(),
+        body: uploadFormData,
       });
 
       if (!response.ok) {
@@ -145,7 +149,7 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
       return data.url;
     } catch (err: any) {
       console.error("Error uploading image:", err);
-      setError(err.message);
+      showError(err.message || "خطا در آپلود تصویر");
       return null;
     } finally {
       setUploadingImage(false);
@@ -155,7 +159,6 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
   const handleSave = async () => {
     console.log(formData);
     try {
-      setError(null);
 
       let finalImageUrl = formData.image_url;
 
@@ -163,7 +166,7 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
       if (imageFile) {
         const uploadedUrl = await handleImageUpload();
         if (!uploadedUrl) {
-          setError("خطا در آپلود تصویر");
+          showError("خطا در آپلود تصویر");
           return;
         }
         finalImageUrl = uploadedUrl;
@@ -171,12 +174,12 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
 
       // Check validation after image upload
       if (!formData.title) {
-        setError("عنوان الزامی است");
+        warning("عنوان الزامی است");
         return;
       }
 
       if (!finalImageUrl) {
-        setError("تصویر الزامی است");
+        warning("تصویر الزامی است");
         return;
       }
 
@@ -203,7 +206,11 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        ...adminFetchInit(),
+        headers: {
+          ...(adminFetchInit().headers as Record<string, string>),
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           title: formData.title,
           image_url: finalImageUrl,
@@ -222,20 +229,26 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
 
       setIsDialogOpen(false);
       fetchBanners();
+      success(editingBanner ? "بنر با موفقیت ویرایش شد" : "بنر با موفقیت اضافه شد");
     } catch (err: any) {
       console.error("Error saving banner:", err);
-      setError(err.message);
+      showError(err.message || "خطا در ذخیره بنر");
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا مطمئن هستید که می‌خواهید این بنر را حذف کنید؟")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "حذف بنر",
+      message: "آیا مطمئن هستید که می‌خواهید این بنر را حذف کنید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/banners/${id}`, {
         method: "DELETE",
+        ...adminFetchInit(),
       });
 
       if (!response.ok) {
@@ -244,9 +257,10 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
       }
 
       fetchBanners();
+      success("بنر با موفقیت حذف شد");
     } catch (err: any) {
       console.error("Error deleting banner:", err);
-      alert(err.message);
+      showError(err.message || "خطا در حذف بنر");
     }
   };
 
@@ -258,6 +272,19 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
       special_day: "روز خاص",
     };
     return labels[type];
+  };
+
+  const timestampToTime = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    return date.toTimeString().slice(0, 5);
+  };
+
+  const formatBannerDateTime = (timestamp: number | null): string | null => {
+    if (!timestamp) return null;
+    const date = new Date(timestamp * 1000);
+    const jalali = formatJalaliDate(timestampToJalali(timestamp));
+    const time = date.toTimeString().slice(0, 5);
+    return `${toPersianDigits(jalali)} ${toPersianDigits(time)}`;
   };
 
   const isBannerActive = (banner: Banner) => {
@@ -352,6 +379,22 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
                             اولویت: {toPersianDigits(banner.priority.toString())}
                           </span>
                         </div>
+                        {(banner.start_date || banner.end_date) && (
+                          <div className={cn("text-xs space-y-0.5 mt-1", isDark ? "text-gray-400" : "text-gray-600")}>
+                            {banner.start_date && (
+                              <p className="flex items-center gap-1">
+                                <Calendar size={11} />
+                                شروع: {formatBannerDateTime(banner.start_date)}
+                              </p>
+                            )}
+                            {banner.end_date && (
+                              <p className="flex items-center gap-1">
+                                <Calendar size={11} />
+                                پایان: {formatBannerDateTime(banner.end_date)}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -380,22 +423,24 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className={cn(isDark ? "bg-neutral-900 border-white/10" : "bg-white")}>
-          <DialogHeader>
-            <DialogTitle className={isDark ? "text-white" : "text-gray-900"}>
+      <Dialog open={isDialogOpen} onOpenChange={open => !open && setIsDialogOpen(false)}>
+        <DialogContent
+          className={cn(
+            "max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden",
+            isDark ? "bg-neutral-900 border-white/10 text-white" : "bg-white"
+          )}
+          dir="rtl"
+        >
+          <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0 text-center items-center">
+            <DialogTitle className={cn("text-center w-full text-base font-bold", isDark ? "text-white" : "text-gray-900")}>
               {editingBanner ? "ویرایش بنر" : "بنر جدید"}
             </DialogTitle>
-            <DialogDescription className={isDark ? "text-gray-400" : "text-gray-600"}>
+            <DialogDescription className={cn("text-center", isDark ? "text-gray-400" : "text-gray-600")}>
               اطلاعات بنر را وارد کنید
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            {error && (
-              <div className={cn("p-3 rounded-md text-sm", isDark ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-600")}>
-                {error}
-              </div>
-            )}
+
+          <div className="overflow-y-auto px-6 py-5 space-y-4 flex-1">
 
             <div className="space-y-2">
               <Label className={isDark ? "text-gray-300" : "text-gray-700"}>عنوان</Label>
@@ -481,13 +526,11 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
                   placeholder="تاریخ شروع"
                   isDark={isDark}
                 />
-                <Input
-                  type="time"
+                <ScrollingTimePicker
                   value={formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                  className={cn(
-                    isDark ? "bg-neutral-800 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
-                  )}
+                  onChange={(time) => setFormData({ ...formData, start_time: time })}
+                  placeholder="ساعت شروع"
+                  isDark={isDark}
                 />
               </div>
             </div>
@@ -501,13 +544,11 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
                   placeholder="تاریخ پایان"
                   isDark={isDark}
                 />
-                <Input
-                  type="time"
+                <ScrollingTimePicker
                   value={formData.end_time}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                  className={cn(
-                    isDark ? "bg-neutral-800 border-white/10 text-white" : "bg-white border-gray-300 text-gray-900"
-                  )}
+                  onChange={(time) => setFormData({ ...formData, end_time: time })}
+                  placeholder="ساعت پایان"
+                  isDark={isDark}
                 />
               </div>
             </div>
@@ -525,19 +566,22 @@ const BannerManager: React.FC<BannerManagerProps> = ({ isDark }) => {
               </Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsDialogOpen(false)}
-            >
-              انصراف
-            </Button>
+
+          <DialogFooter
+            className={cn(
+              "px-6 py-4 border-t shrink-0 flex-row-reverse gap-2 sm:justify-start",
+              isDark ? "border-white/10" : "border-gray-200"
+            )}
+          >
             <Button
               onClick={handleSave}
               disabled={uploadingImage}
               className="bg-coffee-600 hover:bg-coffee-700 text-white"
             >
               {uploadingImage ? "در حال آپلود..." : "ذخیره"}
+            </Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              انصراف
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initializeDatabase, getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess, requireAdminAccess } from "@/lib/adminApiAuth";
 import { v4 as uuidv4 } from "uuid";
 
 initializeDatabase();
 
-// GET single setting by key
+// GET single setting by key — requires admin (read-only)
 export async function GET(
   request: NextRequest,
   { params }: { params: { key: string } }
 ) {
   try {
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
+
     const db = getDatabase();
-    const setting = db.prepare("SELECT * FROM site_settings WHERE key = ?").get(params.key) as any;
+    const setting = db
+      .prepare("SELECT * FROM site_settings WHERE key = ?")
+      .get(params.key) as Record<string, unknown> | undefined;
 
     if (!setting) {
       return NextResponse.json({ error: "Setting not found" }, { status: 404 });
@@ -28,24 +33,14 @@ export async function GET(
   }
 }
 
-// PUT update single setting
+// PUT update single setting — super_admin only
 export async function PUT(
   request: NextRequest,
   { params }: { params: { key: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Only super_admin can update settings
-    if (user.role !== "super_admin") {
-      return NextResponse.json(
-        { error: "شما دسترسی ندارید" },
-        { status: 403 }
-      );
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const body = await request.json();
     const { value, type, description } = body;
@@ -53,20 +48,21 @@ export async function PUT(
     const db = getDatabase();
     const now = Math.floor(Date.now() / 1000);
 
-    // Check if setting exists
-    const existing = db.prepare("SELECT id FROM site_settings WHERE key = ?").get(params.key) as { id: string } | undefined;
+    const existing = db
+      .prepare("SELECT id FROM site_settings WHERE key = ?")
+      .get(params.key) as { id: string } | undefined;
 
     if (existing) {
-      db.prepare(`
-        UPDATE site_settings 
-        SET value = ?, type = ?, description = ?, updatedAt = ?, updatedBy = ?
-        WHERE key = ?
-      `).run(value || null, type || "text", description || null, now, user.id, params.key);
+      db.prepare(
+        `UPDATE site_settings
+         SET value = ?, type = ?, description = ?, updatedAt = ?, updatedBy = ?
+         WHERE key = ?`
+      ).run(value ?? null, type ?? "text", description ?? null, now, auth.userId, params.key);
     } else {
-      db.prepare(`
-        INSERT INTO site_settings (id, key, value, type, description, updatedAt, updatedBy)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(uuidv4(), params.key, value || null, type || "text", description || null, now, user.id);
+      db.prepare(
+        `INSERT INTO site_settings (id, key, value, type, description, updatedAt, updatedBy)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(uuidv4(), params.key, value ?? null, type ?? "text", description ?? null, now, auth.userId);
     }
 
     return NextResponse.json({ success: true, message: "Setting updated successfully" });
@@ -78,4 +74,3 @@ export async function PUT(
     );
   }
 }
-

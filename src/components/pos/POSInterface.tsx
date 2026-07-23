@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
+import { useToast } from "@/components/ui/toast";
 
 interface MenuItem {
   id: string;
@@ -15,6 +16,7 @@ interface MenuItem {
   price: number;
   category: string;
   available: boolean;
+  inStockFromInventory?: boolean;
   imageUrl?: string;
 }
 
@@ -30,6 +32,7 @@ interface POSInterfaceProps {
 }
 
 const POSInterface: React.FC<POSInterfaceProps> = ({ isDark = true }) => {
+  const { success, error: showError, warning } = useToast();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tableNumber, setTableNumber] = useState<string>("");
@@ -48,7 +51,11 @@ const POSInterface: React.FC<POSInterfaceProps> = ({ isDark = true }) => {
       const response = await fetch("/api/menu");
       if (response.ok) {
         const items = await response.json();
-        setMenuItems(items.filter((item: MenuItem) => item.available));
+        setMenuItems(
+          items.filter(
+            (item: MenuItem) => item.available && item.inStockFromInventory !== false
+          )
+        );
       }
     } catch (error) {
       console.error("Failed to fetch menu items:", error);
@@ -103,7 +110,7 @@ const POSInterface: React.FC<POSInterfaceProps> = ({ isDark = true }) => {
 
   const handleSubmitOrder = async () => {
     if (cart.length === 0) {
-      alert("سبد خرید خالی است");
+      warning("سبد خرید خالی است");
       return;
     }
 
@@ -138,9 +145,9 @@ const POSInterface: React.FC<POSInterfaceProps> = ({ isDark = true }) => {
       clearCart();
       setTableNumber("");
       setPaymentMethod("cash");
-      alert("سفارش با موفقیت ثبت شد");
+      success("سفارش با موفقیت ثبت شد");
     } catch (error: any) {
-      alert(error.message || "خطا در ثبت سفارش");
+      showError(error.message || "خطا در ثبت سفارش");
     } finally {
       setSubmitting(false);
     }

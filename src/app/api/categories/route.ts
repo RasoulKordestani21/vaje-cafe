@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
 import * as categoriesService from "@/services/categoriesService";
 
 /**
  * GET /api/categories
- * Get all raw material categories (public endpoint)
+ * Hierarchical inventory category tree for admin product forms
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const categories = categoriesService.getCategories();
-
     return NextResponse.json({
       success: true,
-      data: categories
+      tree: categoriesService.getCategoryTree(),
+      data: categoriesService.getCategories(),
+      groups: categoriesService.getCategoryGroups(),
     });
   } catch (error) {
     console.error("Error fetching categories:", error);
@@ -24,48 +23,11 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/categories
- * Create new category
+ * POST /api/categories — categories are defined in system constants
  */
-export async function POST(request: NextRequest) {
-  try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
-
-    const body = await request.json();
-
-    if (!body.name) {
-      return NextResponse.json(
-        { error: "نام دسته‌بندی الزامی است" },
-        { status: 400 }
-      );
-    }
-
-    const category = categoriesService.createCategory(
-      body.name,
-      body.description,
-      body.color
-    );
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: category
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("Error creating category:", error);
-    return NextResponse.json(
-      { error: "خطا در ایجاد دسته‌بندی" },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "دسته‌بندی‌ها از طریق تنظیمات سیستم مدیریت می‌شوند" },
+    { status: 405 }
+  );
 }

@@ -3,30 +3,27 @@
 import React, { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/components/ui/toast";
 
 export default function ChangePasswordPage() {
+  const { success, error: showError, warning } = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess("");
     setLoading(true);
 
-    // Validation
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError("تمام فیلدها الزامی هستند");
+      warning("تمام فیلدها الزامی هستند");
       setLoading(false);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("رمز عبور‌های جدید مطابقت ندارند");
+      warning("رمز عبور‌های جدید مطابقت ندارند");
       setLoading(false);
       return;
     }
@@ -36,7 +33,7 @@ export default function ChangePasswordPage() {
       !/[a-zA-Z]/.test(newPassword) ||
       !/[0-9]/.test(newPassword)
     ) {
-      setError("رمز عبور باید حداقل 8 کاراکتر بوده و شامل حروف و اعداد باشد");
+      warning("رمز عبور باید حداقل 8 کاراکتر بوده و شامل حروف و اعداد باشد");
       setLoading(false);
       return;
     }
@@ -51,18 +48,16 @@ export default function ChangePasswordPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "خطا در تغییر رمز عبور");
+        showError(data.error || "خطا در تغییر رمز عبور");
         return;
       }
 
-      setSuccess("رمز عبور با موفقیت تغییر یافت");
-      setTimeout(() => {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      }, 500);
+      success("رمز عبور با موفقیت تغییر یافت");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (err) {
-      setError("خطا در ارتباط با سرور");
+      showError("خطا در ارتباط با سرور");
       console.error(err);
     } finally {
       setLoading(false);
@@ -135,20 +130,6 @@ export default function ChangePasswordPage() {
               disabled={loading}
             />
           </div>
-
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg p-4">
-              <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
-            </div>
-          )}
-
-          {success && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/50 rounded-lg p-4">
-              <p className="text-green-700 dark:text-green-400 text-sm">
-                {success}
-              </p>
-            </div>
-          )}
 
           <button
             type="submit"

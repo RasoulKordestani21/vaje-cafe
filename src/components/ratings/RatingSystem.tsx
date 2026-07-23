@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCustomer } from "@/context/CustomerContext";
 import ReviewModal from "./ReviewModal";
 
@@ -26,6 +28,8 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
   size = "md",
 }) => {
   const { customer, isAuthenticated } = useCustomer();
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [rating, setRating] = useState<number>(0);
   const [hoveredRating, setHoveredRating] = useState<number>(0);
   const [ratingData, setRatingData] = useState<RatingData | null>(null);
@@ -68,7 +72,12 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
 
   const handleRatingClick = async (selectedRating: number) => {
     if (!isAuthenticated) {
-      if (confirm("برای ثبت امتیاز باید وارد شوید. آیا می‌خواهید وارد شوید؟")) {
+      const ok = await confirm({
+        title: "ورود به حساب",
+        message: "برای ثبت امتیاز باید وارد شوید. آیا می‌خواهید وارد شوید؟",
+        confirmLabel: "ورود",
+      });
+      if (ok) {
         window.location.href = "/customer/login";
       }
       return;
@@ -103,14 +112,14 @@ const RatingSystem: React.FC<RatingSystemProps> = ({
       if (response.ok) {
         await fetchRatings();
         setShowReviewModal(false);
-        alert("امتیاز شما ثبت شد و پس از تایید مدیر نمایش داده می‌شود.");
+        success("امتیاز شما ثبت شد و پس از تایید مدیر نمایش داده می‌شود.");
       } else {
         const error = await response.json();
-        alert(error.error || "خطا در ثبت امتیاز");
+        showError(error.error || "خطا در ثبت امتیاز");
       }
     } catch (error) {
       console.error("Failed to submit rating:", error);
-      alert("خطا در ثبت امتیاز");
+      showError("خطا در ثبت امتیاز");
     } finally {
       setLoading(false);
     }

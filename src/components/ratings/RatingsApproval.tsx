@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { formatPersianNumber } from "@/utils/dateFormatter";
 import { timestampToJalaliString } from "@/utils/dateFormatter";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import CustomerAvatar from "@/components/customers/CustomerAvatar";
 import {
   adminCard,
@@ -174,6 +176,8 @@ function ReviewCard({
 }
 
 const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
@@ -193,9 +197,12 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
       if (response.ok) {
         const data = await response.json();
         setRatings(data.ratings || []);
+      } else {
+        showError("خطا در بارگذاری نظرات");
       }
     } catch (error) {
       console.error("Failed to fetch ratings:", error);
+      showError("خطا در بارگذاری نظرات");
     } finally {
       setLoading(false);
     }
@@ -210,16 +217,28 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
         credentials: "include",
         body: JSON.stringify({ admin_approved: approved })
       });
-      if (response.ok) await fetchRatings();
+      if (response.ok) {
+        await fetchRatings();
+        success(approved ? "نظر با موفقیت تایید شد" : "تایید نظر لغو شد");
+      } else {
+        showError("خطا در بروزرسانی نظر");
+      }
     } catch (error) {
       console.error("Failed to update rating:", error);
+      showError("خطا در بروزرسانی نظر");
     } finally {
       setApproving(null);
     }
   };
 
   const handleDelete = async (ratingId: string) => {
-    if (!confirm("آیا از حذف این نظر اطمینان دارید؟")) return;
+    const ok = await confirm({
+      title: "حذف نظر",
+      message: "آیا از حذف این نظر اطمینان دارید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       setApproving(ratingId);
       const response = await fetch(`/api/ratings/${ratingId}`, {
@@ -227,9 +246,15 @@ const RatingsApproval: React.FC<RatingsApprovalProps> = ({ isDark }) => {
         headers: getAuthHeaders(),
         credentials: "include"
       });
-      if (response.ok) await fetchRatings();
+      if (response.ok) {
+        await fetchRatings();
+        success("نظر با موفقیت حذف شد");
+      } else {
+        showError("خطا در حذف نظر");
+      }
     } catch (error) {
       console.error("Failed to delete rating:", error);
+      showError("خطا در حذف نظر");
     } finally {
       setApproving(null);
     }

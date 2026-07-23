@@ -1,14 +1,61 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { X, Save, AlertCircle, Loader } from "lucide-react";
-import { formatToman, toPersianDigits } from "@/utils/format";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Save,
+  AlertCircle,
+  Loader,
+  TrendingUp,
+  History,
+  Package,
+  PackagePlus
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { PriceInput } from "@/components/ui/PriceInput";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { adminFetchInit } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { formatToman, toPersianDigits, toEnglishDigits } from "@/utils/format";
+import {
+  adminCard,
+  adminDivider,
+  adminInput,
+  adminMutedSurface,
+  adminSelectContent,
+  adminSelectItem,
+  adminSelectTrigger,
+  adminTextMuted,
+  adminTextPrimary,
+  adminTextSecondary
+} from "@/lib/adminTheme";
+import InventoryHistoryTabs from "@/components/inventory/InventoryHistoryTabs";
+import InventoryCategorySelect from "@/components/inventory/InventoryCategorySelect";
+import type { InventoryLogRecord } from "@/lib/inventoryLogUtils";
+import { findGroupForSubcategory } from "@/constants/inventoryCategories";
 
 interface RawMaterial {
   id?: string;
   name: string;
   type?: "raw_material" | "packed_product";
   category: string;
+  categoryGroup?: string;
   unit: string;
   currentStock: number;
   minStock: number;
@@ -22,10 +69,14 @@ interface MenuItemUsage {
   id: string;
   menu_item_id: string;
   menuItemName: string;
+  menuItemPrice?: number;
   quantity: number;
   unit: string;
   itemCost: number;
+  costPercent?: number | null;
 }
+
+interface InventoryLog extends InventoryLogRecord {}
 
 interface RawMaterialModalProps {
   material?: RawMaterial | null;
@@ -33,119 +84,208 @@ interface RawMaterialModalProps {
   onClose: () => void;
   onSave: (material: RawMaterial) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+  onOpenTransaction?: () => void;
 }
+
+const noSpinner =
+  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]";
+
+const sanitizeAmount = (val: string) => toEnglishDigits(val).replace(/\D/g, "");
+const sanitizeDecimal = (val: string) => {
+  const cleaned = toEnglishDigits(val).replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  return parts.length > 1 ? `${parts[0]}.${parts.slice(1).join("")}` : cleaned;
+};
+
+const weightUnits = ["گرم", "کیلوگرم", "میلی‌لیتر", "لیتر"];
+const numberUnits = ["عدد", "پاکت", "کیسه", "صندوق", "بطری"];
 
 export const RawMaterialModal: React.FC<RawMaterialModalProps> = ({
   material,
   isDark,
   onClose,
   onSave,
-  onDelete
+  onDelete,
+  onOpenTransaction
 }) => {
+  const { success, error: showError, warning } = useToast();
+  const confirm = useConfirm();
   const isNewMaterial = !material?.id;
   const [isLoading, setIsLoading] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItemUsage[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [usageStats, setUsageStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const [formData, setFormData] = useState<RawMaterial>(
-    material || {
+  const [inventoryLogs, setInventoryLogs] = useState<InventoryLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const [formData, setFormData] = useState<RawMaterial>(() => {
+    const base = material || {
       name: "",
-      type: "raw_material",
+      type: "raw_material" as const,
       category: "",
+      categoryGroup: "",
       unit: "گرم",
       currentStock: 0,
       minStock: 0,
       price: 0,
       supplier: ""
+    };
+    if (material && !material.categoryGroup && material.category) {
+      const inferred = findGroupForSubcategory(material.category);
+      if (inferred) return { ...base, categoryGroup: inferred };
     }
+    return base;
+  });
+
+  const [priceInput, setPriceInput] = useState(
+    material?.price ? toPersianDigits(String(material.price)) : ""
+  );
+  const [currentStockInput, setCurrentStockInput] = useState(
+    material?.currentStock != null
+      ? toPersianDigits(String(material.currentStock))
+      : "۰"
+  );
+  const [minStockInput, setMinStockInput] = useState(
+    material?.minStock != null
+      ? toPersianDigits(String(material.minStock))
+      : "۰"
   );
 
   const [unitType, setUnitType] = useState<"weight" | "number">(
-    ["گرم", "کیلوگرم", "میلی‌لیتر", "لیتر"].includes(formData.unit)
-      ? "weight"
-      : "number"
+    weightUnits.includes(material?.unit || "گرم") ? "weight" : "number"
   );
 
-  // Fetch categories
+  const inputClass = cn(adminInput(isDark), "text-right");
+
   useEffect(() => {
-    const fetchCategories = async () => {
-      setLoadingCategories(true);
+    if (!material) return;
+    const next = { ...material };
+    if (!next.categoryGroup && next.category) {
+      const inferred = findGroupForSubcategory(next.category);
+      if (inferred) next.categoryGroup = inferred;
+    }
+    setFormData(next);
+    setPriceInput(
+      material.price ? toPersianDigits(String(material.price)) : ""
+    );
+    setCurrentStockInput(toPersianDigits(String(material.currentStock ?? 0)));
+    setMinStockInput(toPersianDigits(String(material.minStock ?? 0)));
+    setUnitType(weightUnits.includes(material.unit) ? "weight" : "number");
+  }, [material]);
+
+  useEffect(() => {
+    if (!material?.id) return;
+    const fetchUsage = async () => {
+      setLoadingUsage(true);
       try {
-        const response = await fetch("/api/categories");
+        const response = await fetch(
+          `/api/raw-materials/usage/${material.id}`,
+          adminFetchInit()
+        );
         if (response.ok) {
           const data = await response.json();
-          setCategories(data.data || []);
+          setMenuItems(data.data || []);
         }
       } catch (error) {
-        console.error("Error fetching categories:", error);
+        console.error("Error fetching menu item usage:", error);
       } finally {
-        setLoadingCategories(false);
+        setLoadingUsage(false);
       }
     };
-    fetchCategories();
-  }, []);
+    fetchUsage();
+  }, [material?.id]);
 
-  // Fetch menu items using this raw material
   useEffect(() => {
-    if (!isNewMaterial && material?.id) {
-      const fetchUsage = async () => {
-        setLoadingUsage(true);
-        try {
-          const response = await fetch(
-            `/api/raw-materials/usage/${material.id}`
-          );
-          if (response.ok) {
-            const data = await response.json();
-            setMenuItems(data.data || []);
-          }
-        } catch (error) {
-          console.error("Error fetching menu item usage:", error);
-        } finally {
-          setLoadingUsage(false);
+    if (!material?.id) return;
+    const fetchLogs = async () => {
+      setLoadingLogs(true);
+      try {
+        const response = await fetch(
+          `/api/products/${material.id}/inventory`,
+          adminFetchInit()
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setInventoryLogs(Array.isArray(data) ? data : []);
         }
-      };
-      fetchUsage();
+      } catch (error) {
+        console.error("Error fetching inventory logs:", error);
+      } finally {
+        setLoadingLogs(false);
+      }
+    };
+    fetchLogs();
+  }, [material?.id, material?.currentStock, material?.updatedAt]);
+
+  const parsedPrice = parseInt(sanitizeAmount(priceInput), 10) || 0;
+  const parsedCurrentStock =
+    parseFloat(sanitizeDecimal(currentStockInput)) || 0;
+  const parsedMinStock = parseFloat(sanitizeDecimal(minStockInput)) || 0;
+
+  const priceInsights = useMemo(() => {
+    if (!menuItems.length || parsedPrice <= 0) return null;
+    const rows = menuItems.map(item => {
+      const itemCost = item.quantity * parsedPrice;
+      const menuPrice = item.menuItemPrice || 0;
+      const costPercent =
+        menuPrice > 0 ? Math.round((itemCost / menuPrice) * 100) : null;
+      const margin = menuPrice > 0 ? menuPrice - itemCost : null;
+      return { ...item, itemCost, costPercent, margin, menuPrice };
+    });
+    const highCost = rows.filter(
+      r => r.costPercent != null && r.costPercent >= 40
+    );
+    return { rows, highCost };
+  }, [menuItems, parsedPrice]);
+
+  const handleCalculateUsage = async () => {
+    if (!material?.id) return;
+    setLoadingStats(true);
+    try {
+      const response = await fetch(
+        "/api/raw-materials/calculate",
+        adminFetchInit()
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const stats = data.data.find((item: any) => item.id === material.id);
+        setUsageStats(stats);
+      }
+    } catch (error) {
+      console.error("Error calculating usage:", error);
+      showError("خطا در محاسبه استفاده");
+    } finally {
+      setLoadingStats(false);
     }
-  }, [isNewMaterial, material?.id]);
-
-  const weightUnits = ["گرم", "کیلوگرم", "میلی‌لیتر", "لیتر"];
-  const numberUnits = ["عدد", "پاکت", "کیسه", "صندوق", "بطری"];
-
-  const formatDate = (timestamp?: number) => {
-    if (!timestamp) return "-";
-    return new Date(timestamp).toLocaleDateString("fa-IR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
   };
 
-  const formatTime = (timestamp?: number) => {
-    if (!timestamp) return "";
-    return new Date(timestamp).toLocaleTimeString("fa-IR", {
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.name.trim() || !formData.category.trim()) {
-      alert("لطفا نام و دسته‌بندی را وارد کنید");
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (
+      !formData.name.trim() ||
+      !formData.category.trim() ||
+      !formData.categoryGroup?.trim()
+    ) {
+      warning("لطفاً نام، گروه و زیردسته را انتخاب کنید");
       return;
     }
 
+    const payload: RawMaterial = {
+      ...formData,
+      price: parsedPrice,
+      currentStock: parsedCurrentStock,
+      minStock: parsedMinStock
+    };
+
     setIsLoading(true);
     try {
-      await onSave(formData);
+      await onSave(payload);
+      success(isNewMaterial ? "با موفقیت اضافه شد" : "با موفقیت ذخیره شد");
       onClose();
     } catch (error) {
       console.error("Error saving:", error);
-      alert("خطا در ذخیره‌سازی");
+      showError("خطا در ذخیره‌سازی");
     } finally {
       setIsLoading(false);
     }
@@ -153,656 +293,596 @@ export const RawMaterialModal: React.FC<RawMaterialModalProps> = ({
 
   const handleDelete = async () => {
     if (!material?.id || !onDelete) return;
-    if (!confirm("آیا مطمئن هستید؟ این عملیات قابل بازگشت نیست.")) return;
-
+    const ok = await confirm({
+      title: "حذف محصول",
+      message: "آیا مطمئن هستید؟ این عملیات قابل بازگشت نیست.",
+      confirmLabel: "حذف",
+      variant: "destructive"
+    });
+    if (!ok) return;
     setIsLoading(true);
     try {
       await onDelete(material.id);
+      success("با موفقیت حذف شد");
       onClose();
     } catch (error) {
       console.error("Error deleting:", error);
-      alert("خطا در حذف");
+      showError("خطا در حذف");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCalculateUsage = async () => {
-    if (!material?.id) return;
-
-    setLoadingStats(true);
-    try {
-      const response = await fetch("/api/raw-materials/calculate");
-      if (response.ok) {
-        const data = await response.json();
-        // Find this material in the results
-        const stats = data.data.find((item: any) => item.id === material.id);
-        setUsageStats(stats);
-      }
-    } catch (error) {
-      console.error("Error calculating usage:", error);
-      alert("خطا در محاسبه استفاده");
-    } finally {
-      setLoadingStats(false);
-    }
-  };
-
-  const isLowStock = formData.currentStock < formData.minStock;
+  const isLowStock = parsedCurrentStock < parsedMinStock;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose}></div>
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div
-          className={`${
-            isDark
-              ? "bg-neutral-900 border-white/10"
-              : "bg-white border-gray-300"
-          } border rounded-2xl shadow-2xl w-full max-w-2xl pointer-events-auto max-h-[90vh] overflow-y-auto`}
+    <Dialog open onOpenChange={open => !open && onClose()}>
+      <DialogContent
+        className={cn(
+          "max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden",
+          isDark ? "bg-neutral-900 border-white/10" : "bg-white"
+        )}
+        dir="rtl"
+      >
+        <DialogHeader
+          className={cn("px-6 py-4 border-b shrink-0", adminDivider(isDark))}
         >
-          {/* Header */}
-          <div
-            className={`sticky top-0 flex justify-between items-center p-6 border-b ${
-              isDark ? "border-white/5" : "border-gray-200"
-            }`}
-          >
-            <h2
-              className={`text-2xl font-bold ${
-                isDark ? "text-white" : "text-gray-900"
-              }`}
-            >
-              {isNewMaterial
-                ? formData.type === "packed_product"
-                  ? "اضافه کردن محصول بسته‌بندی"
-                  : "اضافه کردن ماده اولیه"
-                : formData.name}
-            </h2>
-            <button
-              onClick={onClose}
-              className={`p-2 rounded-lg transition-colors ${
-                isDark
-                  ? "hover:bg-white/10 text-gray-400"
-                  : "hover:bg-gray-100 text-gray-600"
-              }`}
-            >
-              <X size={24} />
-            </button>
-          </div>
-
-          {/* Content */}
-          <div className="p-6">
-            {/* Low Stock Alert - Only show when viewing existing material */}
-            {!isNewMaterial && isLowStock && (
-              <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-lg flex gap-3 mb-6">
-                <AlertCircle className="text-red-400 flex-shrink-0" size={20} />
-                <div>
-                  <p className="text-red-400 font-semibold">هشدار کم موجودی</p>
-                  <p className="text-red-300 text-sm">
-                    موجودی فعلی (
-                    {toPersianDigits(formData.currentStock.toString())}) کمتر از
-                    حداقل مجاز است
-                  </p>
-                </div>
-              </div>
+          <DialogTitle
+            className={cn(
+              "text-lg font-bold flex items-center gap-2",
+              adminTextPrimary(isDark)
             )}
+          >
+            <Package size={20} className="text-coffee-500 shrink-0" />
+            {isNewMaterial
+              ? formData.type === "packed_product"
+                ? "افزودن محصول بسته‌بندی"
+                : "افزودن ماده اولیه"
+              : formData.name}
+          </DialogTitle>
+        </DialogHeader>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Name and Category */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className={`block text-sm font-semibold mb-2 ${
-                      isDark ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    {formData.type === "packed_product"
-                      ? "نام محصول *"
-                      : "نام ماده اولیه *"}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={e =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDark
-                        ? "bg-neutral-800 border-white/10 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                    placeholder={
-                      formData.type === "packed_product"
-                        ? "مثلا: کیک شکلاتی"
-                        : "مثلا: قهوه عربی"
-                    }
-                  />
-                </div>
-
-                <div>
-                  <label
-                    className={`block text-sm font-semibold mb-2 ${
-                      isDark ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    دسته‌بندی *
-                  </label>
-                  <select
-                    required
-                    value={formData.category}
-                    onChange={e =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
-                    disabled={loadingCategories}
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDark
-                        ? "bg-neutral-800 border-white/10 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  >
-                    <option value="">
-                      {loadingCategories
-                        ? "در حال بارگزاری..."
-                        : "انتخاب دسته‌بندی"}
-                    </option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.name}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Type Selector */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+          {!isNewMaterial && isLowStock && (
+            <div
+              className={cn(
+                "p-4 rounded-xl border flex gap-3",
+                isDark
+                  ? "bg-red-500/10 border-red-500/30"
+                  : "bg-red-50 border-red-200"
+              )}
+            >
+              <AlertCircle className="text-red-500 shrink-0" size={20} />
               <div>
-                <label
-                  className={`block text-sm font-semibold mb-2 ${
-                    isDark ? "text-gray-300" : "text-gray-700"
-                  }`}
-                >
-                  نوع محصول *
-                </label>
-                <select
-                  value={formData.type || "raw_material"}
-                  onChange={e =>
-                    setFormData({
-                      ...formData,
-                      type:
-                        e.target.value === "packed_product"
-                          ? "packed_product"
-                          : "raw_material"
-                    })
-                  }
-                  required
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/10 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  }`}
-                >
-                  <option value="raw_material">مواد اولیه</option>
-                  <option value="packed_product">محصول بسته‌بندی</option>
-                </select>
-              </div>
-
-              {/* Unit Type Selector */}
-              <div>
-                <label
-                  className={`block text-sm font-semibold mb-2 ${
-                    isDark ? "text-gray-300" : "text-gray-700"
-                  }`}
-                >
-                  نوع واحد اندازه‌گیری
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUnitType("weight");
-                      setFormData({ ...formData, unit: weightUnits[0] });
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg transition font-medium ${
-                      unitType === "weight"
-                        ? "bg-coffee-600 text-white"
-                        : isDark
-                        ? "bg-neutral-800 text-gray-400 border border-white/10"
-                        : "bg-gray-100 text-gray-700 border border-gray-300"
-                    }`}
-                  >
-                    وزن / حجم
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUnitType("number");
-                      setFormData({ ...formData, unit: numberUnits[0] });
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg transition font-medium ${
-                      unitType === "number"
-                        ? "bg-coffee-600 text-white"
-                        : isDark
-                        ? "bg-neutral-800 text-gray-400 border border-white/10"
-                        : "bg-gray-100 text-gray-700 border border-gray-300"
-                    }`}
-                  >
-                    عدد / تعداد
-                  </button>
-                </div>
-              </div>
-
-              {/* Unit Selection */}
-              <div>
-                <label
-                  className={`block text-sm font-semibold mb-2 ${
-                    isDark ? "text-gray-300" : "text-gray-700"
-                  }`}
-                >
-                  واحد اندازه‌گیری *
-                </label>
-                <select
-                  value={formData.unit}
-                  onChange={e =>
-                    setFormData({ ...formData, unit: e.target.value })
-                  }
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/10 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  }`}
-                >
-                  {(unitType === "weight" ? weightUnits : numberUnits).map(
-                    unit => (
-                      <option key={unit} value={unit}>
-                        {unit}
-                      </option>
-                    )
+                <p
+                  className={cn(
+                    "font-semibold text-sm",
+                    isDark ? "text-red-400" : "text-red-700"
                   )}
-                </select>
-              </div>
-
-              {/* Stock and Price */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label
-                    className={`block text-sm font-semibold mb-2 ${
-                      isDark ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    موجودی فعلی *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    required
-                    value={formData.currentStock}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        currentStock: parseFloat(e.target.value) || 0
-                      })
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDark
-                        ? "bg-neutral-800 border-white/10 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    className={`block text-sm font-semibold mb-2 ${
-                      isDark ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    حداقل موجودی *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    required
-                    value={formData.minStock}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        minStock: parseFloat(e.target.value) || 0
-                      })
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDark
-                        ? "bg-neutral-800 border-white/10 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    className={`block text-sm font-semibold mb-2 ${
-                      isDark ? "text-gray-300" : "text-gray-700"
-                    }`}
-                  >
-                    قیمت (تومان) *
-                  </label>
-                  <input
-                    type="number"
-                    step="1000"
-                    required
-                    value={formData.price}
-                    onChange={e =>
-                      setFormData({
-                        ...formData,
-                        price: parseFloat(e.target.value) || 0
-                      })
-                    }
-                    className={`w-full px-3 py-2 rounded-lg border ${
-                      isDark
-                        ? "bg-neutral-800 border-white/10 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  />
-                </div>
-              </div>
-
-              {/* Supplier */}
-              <div>
-                <label
-                  className={`block text-sm font-semibold mb-2 ${
-                    isDark ? "text-gray-300" : "text-gray-700"
-                  }`}
                 >
-                  تامین‌کننده
-                </label>
-                <input
-                  type="text"
-                  value={formData.supplier || ""}
+                  هشدار کم موجودی
+                </p>
+                <p className={cn("text-xs mt-0.5", adminTextMuted(isDark))}>
+                  موجودی فعلی ({toPersianDigits(parsedCurrentStock.toString())})
+                  کمتر از حداقل ({toPersianDigits(parsedMinStock.toString())})
+                  است
+                </p>
+              </div>
+            </div>
+          )}
+
+          <form id="product-form" onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label
+                  className={cn(
+                    "mb-1.5 block text-sm",
+                    adminTextSecondary(isDark)
+                  )}
+                >
+                  {formData.type === "packed_product"
+                    ? "نام محصول *"
+                    : "نام ماده اولیه *"}
+                </Label>
+                <Input
+                  required
+                  value={formData.name}
                   onChange={e =>
-                    setFormData({ ...formData, supplier: e.target.value })
+                    setFormData({ ...formData, name: e.target.value })
                   }
-                  className={`w-full px-3 py-2 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/10 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  }`}
-                  placeholder="اختیاری"
+                  className={inputClass}
+                  placeholder={
+                    formData.type === "packed_product"
+                      ? "مثلاً: کیک شکلاتی"
+                      : "مثلاً: قهوه عربیکا"
+                  }
                 />
               </div>
+            </div>
 
-              {/* Date Info - Only for existing material */}
-              {!isNewMaterial && material?.createdAt && (
-                <div
-                  className={`p-4 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/5"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
+            <InventoryCategorySelect
+              categoryGroup={formData.categoryGroup || ""}
+              category={formData.category}
+              onCategoryGroupChange={group =>
+                setFormData(prev => ({
+                  ...prev,
+                  categoryGroup: group,
+                  category: ""
+                }))
+              }
+              onCategoryChange={sub =>
+                setFormData(prev => ({ ...prev, category: sub }))
+              }
+              isDark={isDark}
+            />
+
+            <div>
+              <Label
+                className={cn(
+                  "mb-1.5 block text-sm",
+                  adminTextSecondary(isDark)
+                )}
+              >
+                نوع محصول *
+              </Label>
+              <Select
+                value={formData.type || "raw_material"}
+                onValueChange={v =>
+                  setFormData({
+                    ...formData,
+                    type:
+                      v === "packed_product" ? "packed_product" : "raw_material"
+                  })
+                }
+              >
+                <SelectTrigger
+                  className={cn(adminSelectTrigger(isDark), "w-full")}
+                  dir="rtl"
                 >
-                  <p
-                    className={`text-xs font-semibold ${
-                      isDark ? "text-gray-400" : "text-gray-600"
-                    }`}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={adminSelectContent(isDark)} dir="rtl">
+                  <SelectItem value="raw_material" className={adminSelectItem}>
+                    مواد اولیه
+                  </SelectItem>
+                  <SelectItem
+                    value="packed_product"
+                    className={adminSelectItem}
                   >
-                    اطلاعات تاریخی
-                  </p>
-                  <div className="mt-2 space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span
-                        className={isDark ? "text-gray-400" : "text-gray-600"}
-                      >
-                        تاریخ ایجاد:
-                      </span>
-                      <span className={isDark ? "text-white" : "text-gray-900"}>
-                        {formatDate(material.createdAt)}{" "}
-                        {formatTime(material.createdAt)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span
-                        className={isDark ? "text-gray-400" : "text-gray-600"}
-                      >
-                        آخرین ویرایش:
-                      </span>
-                      <span className={isDark ? "text-white" : "text-gray-900"}>
-                        {formatDate(material.updatedAt)}{" "}
-                        {formatTime(material.updatedAt)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                    محصول بسته‌بندی
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              {/* Menu Items Using This Material - Only for existing material */}
-              {!isNewMaterial && (
-                <div
-                  className={`p-4 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/5"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <p
-                      className={`text-xs font-semibold ${
-                        isDark ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      موارد استفاده در منو
-                    </p>
-                    {loadingUsage && (
-                      <Loader size={16} className="animate-spin" />
+            <div>
+              <Label
+                className={cn(
+                  "mb-1.5 block text-sm",
+                  adminTextSecondary(isDark)
+                )}
+              >
+                نوع واحد اندازه‌گیری
+              </Label>
+              <div className="flex gap-2">
+                {(["weight", "number"] as const).map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setUnitType(type);
+                      setFormData({
+                        ...formData,
+                        unit:
+                          type === "weight" ? weightUnits[0] : numberUnits[0]
+                      });
+                    }}
+                    className={cn(
+                      "flex-1 py-2 px-3 rounded-lg text-sm font-medium transition border",
+                      unitType === type
+                        ? "bg-coffee-600 text-white border-coffee-600"
+                        : isDark
+                          ? "bg-neutral-800 text-gray-400 border-white/10 hover:border-white/20"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                     )}
-                  </div>
+                  >
+                    {type === "weight" ? "وزن / حجم" : "عدد / تعداد"}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  {menuItems.length === 0 ? (
-                    <p
-                      className={`text-sm ${
-                        isDark ? "text-gray-500" : "text-gray-500"
-                      }`}
-                    >
-                      {loadingUsage
-                        ? "در حال بارگزاری..."
-                        : "این ماده اولیه در هیچ منویی استفاده نمی‌شود"}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {menuItems.map(item => (
-                        <div
-                          key={item.id}
-                          className={`flex justify-between items-center p-3 rounded-lg ${
-                            isDark
-                              ? "bg-neutral-700"
-                              : "bg-white border border-gray-200"
-                          }`}
-                        >
-                          <div className="flex-1">
-                            <p
-                              className={`font-medium ${
-                                isDark ? "text-white" : "text-gray-900"
-                              }`}
-                            >
-                              {item.menuItemName}
-                            </p>
-                            <p
-                              className={`text-sm ${
-                                isDark ? "text-gray-400" : "text-gray-600"
-                              }`}
-                            >
-                              {toPersianDigits(item.quantity.toString())}{" "}
-                              {item.unit}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p
-                              className={`text-sm font-semibold ${
-                                isDark ? "text-green-400" : "text-green-600"
-                              }`}
-                            >
-                              {formatToman(Math.round(item.itemCost))}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+            <div>
+              <Label
+                className={cn(
+                  "mb-1.5 block text-sm",
+                  adminTextSecondary(isDark)
+                )}
+              >
+                واحد *
+              </Label>
+              <Select
+                value={formData.unit}
+                onValueChange={v => setFormData({ ...formData, unit: v })}
+              >
+                <SelectTrigger
+                  className={cn(adminSelectTrigger(isDark), "w-full")}
+                  dir="rtl"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={adminSelectContent(isDark)} dir="rtl">
+                  {(unitType === "weight" ? weightUnits : numberUnits).map(
+                    unit => (
+                      <SelectItem
+                        key={unit}
+                        value={unit}
+                        className={adminSelectItem}
+                      >
+                        {unit}
+                      </SelectItem>
+                    )
                   )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <Label
+                  className={cn(
+                    "mb-1.5 block text-sm",
+                    adminTextSecondary(isDark)
+                  )}
+                >
+                  موجودی فعلی *
+                </Label>
+                <Input
+                  inputMode="decimal"
+                  value={currentStockInput}
+                  onChange={e =>
+                    setCurrentStockInput(
+                      toPersianDigits(sanitizeDecimal(e.target.value))
+                    )
+                  }
+                  className={cn(inputClass, noSpinner)}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <Label
+                  className={cn(
+                    "mb-1.5 block text-sm",
+                    adminTextSecondary(isDark)
+                  )}
+                >
+                  حداقل موجودی *
+                </Label>
+                <Input
+                  inputMode="decimal"
+                  value={minStockInput}
+                  onChange={e =>
+                    setMinStockInput(
+                      toPersianDigits(sanitizeDecimal(e.target.value))
+                    )
+                  }
+                  className={cn(inputClass, noSpinner)}
+                  dir="ltr"
+                />
+              </div>
+              <PriceInput
+                label="قیمت"
+                value={priceInput}
+                onChange={(value, numericValue) => setPriceInput(value)}
+                required
+                placeholder="۰"
+                min={1}
+                labelClassName={cn("text-sm", adminTextSecondary(isDark))}
+                inputClassName={cn(inputClass, noSpinner)}
+              />
+            </div>
+
+            <div>
+              <Label
+                className={cn(
+                  "mb-1.5 block text-sm",
+                  adminTextSecondary(isDark)
+                )}
+              >
+                تامین‌کننده
+              </Label>
+              <Input
+                value={formData.supplier || ""}
+                onChange={e =>
+                  setFormData({ ...formData, supplier: e.target.value })
+                }
+                className={inputClass}
+                placeholder="اختیاری"
+              />
+            </div>
+          </form>
+
+          {/* Price expert — menu cost vs selling price */}
+          {!isNewMaterial && priceInsights && priceInsights.rows.length > 0 && (
+            <div
+              className={cn(
+                "rounded-xl border p-4 space-y-3",
+                adminCard(isDark)
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUp size={16} className="text-coffee-500" />
+                <h4
+                  className={cn("text-sm font-bold", adminTextPrimary(isDark))}
+                >
+                  تحلیل قیمت در منو
+                </h4>
+              </div>
+              <p className={cn("text-xs", adminTextMuted(isDark))}>
+                هزینه این ماده در هر آیتم منو نسبت به قیمت فروش
+              </p>
+              {priceInsights.highCost.length > 0 && (
+                <div
+                  className={cn(
+                    "text-xs p-2.5 rounded-lg border",
+                    isDark
+                      ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+                      : "bg-yellow-50 border-yellow-200 text-yellow-800"
+                  )}
+                >
+                  {priceInsights.highCost.length} آیتم با هزینه ماده بالای ۴۰٪
+                  قیمت فروش — بررسی قیمت‌گذاری توصیه می‌شود
                 </div>
               )}
-
-              {/* Calculation Statistics - Only for existing material */}
-              {!isNewMaterial && (
-                <div
-                  className={`p-4 rounded-lg border ${
-                    isDark
-                      ? "bg-neutral-800 border-white/5"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <p
-                      className={`text-xs font-semibold ${
-                        isDark ? "text-gray-400" : "text-gray-600"
-                      }`}
-                    >
-                      آمار استفاده
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleCalculateUsage}
-                      disabled={loadingStats}
-                      className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-                        loadingStats
-                          ? "opacity-50 cursor-not-allowed"
-                          : isDark
-                          ? "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
-                          : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                      }`}
-                    >
-                      {loadingStats ? "در حال محاسبه..." : "محاسبه"}
-                    </button>
-                  </div>
-
-                  {usageStats ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span
-                          className={isDark ? "text-gray-400" : "text-gray-600"}
-                        >
-                          کل استفاده:
-                        </span>
-                        <span
-                          className={`font-semibold ${
-                            isDark ? "text-white" : "text-gray-900"
-                          }`}
-                        >
-                          {toPersianDigits(
-                            (usageStats.totalUsage || 0).toString()
-                          )}{" "}
-                          {formData.unit}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span
-                          className={isDark ? "text-gray-400" : "text-gray-600"}
-                        >
-                          تعداد سفارشات:
-                        </span>
-                        <span
-                          className={`font-semibold ${
-                            isDark ? "text-white" : "text-gray-900"
-                          }`}
-                        >
-                          {toPersianDigits(
-                            (usageStats.ordersCount || 0).toString()
-                          )}
-                        </span>
-                      </div>
-                      {usageStats.totalUsage && (
-                        <div className="flex justify-between">
-                          <span
-                            className={
-                              isDark ? "text-gray-400" : "text-gray-600"
-                            }
-                          >
-                            باقی مانده:
-                          </span>
-                          <span
-                            className={`font-semibold ${
-                              formData.currentStock -
-                                (usageStats.totalUsage || 0) <
-                              0
+              <div className="space-y-2">
+                {priceInsights.rows.map(row => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      "flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg text-xs",
+                      adminMutedSurface(isDark),
+                      adminDivider(isDark)
+                    )}
+                  >
+                    <div>
+                      <p
+                        className={cn("font-medium", adminTextPrimary(isDark))}
+                      >
+                        {row.menuItemName}
+                      </p>
+                      <p className={adminTextMuted(isDark)}>
+                        {toPersianDigits(row.quantity.toString())} {row.unit} ×{" "}
+                        {formatToman(parsedPrice)}
+                      </p>
+                    </div>
+                    <div className="text-left space-y-0.5">
+                      <p
+                        className={
+                          isDark ? "text-emerald-400" : "text-emerald-600"
+                        }
+                      >
+                        هزینه: {formatToman(Math.round(row.itemCost))}
+                      </p>
+                      {row.menuPrice > 0 && (
+                        <>
+                          <p className={adminTextSecondary(isDark)}>
+                            فروش: {formatToman(row.menuPrice)}
+                          </p>
+                          <p
+                            className={cn(
+                              "font-semibold",
+                              row.costPercent != null && row.costPercent >= 40
                                 ? isDark
                                   ? "text-red-400"
                                   : "text-red-600"
                                 : isDark
-                                ? "text-green-400"
-                                : "text-green-600"
-                            }`}
+                                  ? "text-blue-400"
+                                  : "text-blue-600"
+                            )}
                           >
-                            {toPersianDigits(
-                              (
-                                formData.currentStock -
-                                (usageStats.totalUsage || 0)
-                              ).toString()
-                            )}{" "}
-                            {formData.unit}
-                          </span>
-                        </div>
+                            {row.costPercent != null
+                              ? `${toPersianDigits(String(row.costPercent))}٪ از قیمت فروش`
+                              : "—"}
+                          </p>
+                        </>
                       )}
                     </div>
-                  ) : (
-                    <p
-                      className={`text-sm ${
-                        isDark ? "text-gray-500" : "text-gray-500"
-                      }`}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Menu usage list */}
+          {!isNewMaterial && (
+            <div className={cn("rounded-xl border p-4", adminCard(isDark))}>
+              <div className="flex items-center justify-between mb-3">
+                <p
+                  className={cn("text-sm font-bold", adminTextPrimary(isDark))}
+                >
+                  موارد استفاده در منو
+                </p>
+                {loadingUsage && (
+                  <Loader size={16} className="animate-spin text-coffee-500" />
+                )}
+              </div>
+              {menuItems.length === 0 ? (
+                <p className={cn("text-sm", adminTextMuted(isDark))}>
+                  {loadingUsage
+                    ? "در حال بارگذاری..."
+                    : "در هیچ آیتم منویی استفاده نشده"}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {menuItems.map(item => (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "flex justify-between items-center p-3 rounded-lg text-sm",
+                        adminMutedSurface(isDark)
+                      )}
                     >
-                      برای دیدن آمار استفاده، بر روی دکمه محاسبه کلیک کنید
-                    </p>
-                  )}
+                      <div>
+                        <p
+                          className={cn(
+                            "font-medium",
+                            adminTextPrimary(isDark)
+                          )}
+                        >
+                          {item.menuItemName}
+                        </p>
+                        <p className={cn("text-xs", adminTextMuted(isDark))}>
+                          {toPersianDigits(item.quantity.toString())}{" "}
+                          {item.unit}
+                        </p>
+                      </div>
+                      <p
+                        className={cn(
+                          "font-semibold text-sm",
+                          isDark ? "text-emerald-400" : "text-emerald-600"
+                        )}
+                      >
+                        {formatToman(Math.round(item.itemCost))}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
-            </form>
-          </div>
+            </div>
+          )}
 
-          {/* Footer */}
-          <div
-            className={`sticky bottom-0 flex gap-3 p-6 border-t ${
-              isDark
-                ? "border-white/5 bg-neutral-900/50"
-                : "border-gray-200 bg-gray-50"
-            }`}
-          >
-            <button
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="flex items-center gap-2 flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition font-semibold disabled:opacity-50"
-            >
-              <Save size={18} />
-              {isNewMaterial ? "ایجاد" : "ذخیره"}
-            </button>
+          {/* Usage stats */}
+          {!isNewMaterial && (
+            <div className={cn("rounded-xl border p-4", adminCard(isDark))}>
+              <div className="flex items-center justify-between mb-3">
+                <p
+                  className={cn("text-sm font-bold", adminTextPrimary(isDark))}
+                >
+                  آمار مصرف
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCalculateUsage}
+                  disabled={loadingStats}
+                  className="text-xs h-8"
+                >
+                  {loadingStats ? "در حال محاسبه..." : "محاسبه مصرف"}
+                </Button>
+              </div>
+              {usageStats ? (
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className={adminTextMuted(isDark)}>کل مصرف:</span>
+                    <span className={adminTextPrimary(isDark)}>
+                      {toPersianDigits(String(usageStats.totalUsage || 0))}{" "}
+                      {formData.unit}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className={adminTextMuted(isDark)}>
+                      تعداد سفارشات:
+                    </span>
+                    <span className={adminTextPrimary(isDark)}>
+                      {toPersianDigits(String(usageStats.ordersCount || 0))}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className={cn("text-sm", adminTextMuted(isDark))}>
+                  برای دیدن آمار مصرف واقعی، دکمه محاسبه را بزنید
+                </p>
+              )}
+            </div>
+          )}
 
-            {!isNewMaterial && onDelete && (
-              <button
-                onClick={handleDelete}
-                disabled={isLoading}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition font-semibold disabled:opacity-50"
-              >
-                حذف
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition font-semibold"
-            >
-              {isNewMaterial ? "انصراف" : "بستن"}
-            </button>
-          </div>
+          {/* Inventory history */}
+          {!isNewMaterial && (
+            <div className={cn("rounded-xl border p-4", adminCard(isDark))}>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <History size={16} className="text-coffee-500" />
+                  <p
+                    className={cn(
+                      "text-sm font-bold",
+                      adminTextPrimary(isDark)
+                    )}
+                  >
+                    تاریخچه موجودی
+                  </p>
+                </div>
+                {onOpenTransaction && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={onOpenTransaction}
+                    className="bg-coffee-600 hover:bg-coffee-500 text-white h-8"
+                  >
+                    <PackagePlus size={14} className="ml-1" />
+                    عملیات موجودی
+                  </Button>
+                )}
+              </div>
+              {loadingLogs ? (
+                <p
+                  className={cn(
+                    "text-sm py-4 text-center",
+                    adminTextMuted(isDark)
+                  )}
+                >
+                  در حال بارگذاری...
+                </p>
+              ) : (
+                <InventoryHistoryTabs
+                  logs={inventoryLogs}
+                  unit={formData.unit}
+                  isDark={isDark}
+                  compact
+                  emptyMessage="هنوز تغییری در موجودی ثبت نشده (با خرید، فروش یا بروزرسانی، تاریخچه ثبت می‌شود)"
+                />
+              )}
+            </div>
+          )}
         </div>
-      </div>
-    </>
+
+        <DialogFooter
+          className={cn(
+            "px-6 py-4 border-t shrink-0 flex-row gap-2 sm:gap-2",
+            adminDivider(isDark),
+            isDark ? "bg-neutral-900/80" : "bg-gray-50"
+          )}
+        >
+          <Button
+            type="submit"
+            form="product-form"
+            disabled={isLoading}
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <Save size={16} className="ml-1" />
+            {isNewMaterial ? "ایجاد محصول" : "ذخیره تغییرات"}
+          </Button>
+          {!isNewMaterial && onDelete && (
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isLoading}
+              onClick={handleDelete}
+              className="flex-1"
+            >
+              حذف
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1"
+          >
+            {isNewMaterial ? "انصراف" : "بستن"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

@@ -6,6 +6,8 @@ export interface MenuItem {
   category: string;
   imageUrl?: string;
   available: boolean;
+  /** False when linked ingredients lack enough inventory */
+  inStockFromInventory?: boolean;
   is_pinned?: boolean;
   is_suggested?: boolean;
   display_order?: number; // Display order for menu items
@@ -65,20 +67,12 @@ export interface Branch {
   updatedAt: number;
 }
 
-export type Category =
-  | "اسپرسو"
-  | "قهوه دمی"
-  | "نوشیدنی سرد"
-  | "کیک و دسر"
-  | "نوشیدنی خاص";
+export type Category = string;
 
-export const CATEGORIES: Category[] = [
-  "اسپرسو",
-  "قهوه دمی",
-  "نوشیدنی سرد",
-  "نوشیدنی خاص",
-  "کیک و دسر"
-];
+export {
+  MENU_CATEGORY_GROUPS as CATEGORIES,
+  MENU_CATEGORIES,
+} from "./constants/menuCategories";
 
 export interface OrderItem {
   menuItemId: string;
@@ -127,7 +121,9 @@ export interface MenuContextType {
   authChecked: boolean;
   userRole: "admin" | "super_admin" | null;
   login: (role: "admin" | "super_admin") => boolean;
+  loginStaff: () => boolean;
   logout: () => void;
+  logoutPanel: () => Promise<void>;
   qrCodeUrl: string;
   updateQrCodeUrl: (url: string) => void;
   // Raw Materials (Super Admin only)

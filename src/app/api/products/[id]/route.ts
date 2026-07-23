@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import * as productsService from "@/services/productsService";
-
+import { resolveCategoryFields } from "@/services/categoriesService";
 // GET single product
 export async function GET(
   request: NextRequest,
@@ -31,14 +31,28 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const authErr = ensureAdmin(request);
-    if (authErr) return authErr;
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const { id } = await Promise.resolve(params);
     const body = await request.json();
 
-    const product = productsService.updateProduct(id, body);
-    return NextResponse.json(product);
+    if (body.category !== undefined || body.categoryGroup !== undefined) {
+      const resolved = resolveCategoryFields({
+        categoryGroup: body.categoryGroup,
+        category: body.category,
+      });
+      if (!resolved) {
+        return NextResponse.json(
+          { error: "دسته‌بندی انتخاب‌شده معتبر نیست" },
+          { status: 400 }
+        );
+      }
+      body.category = resolved.category;
+      body.categoryGroup = resolved.categoryGroup;
+    }
+
+    const product = productsService.updateProduct(id, body);    return NextResponse.json(product);
   } catch (error: any) {
     console.error("Product PUT error:", error);
     if (error.message?.includes("not found")) {
@@ -57,8 +71,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const authErr = ensureAdmin(request);
-    if (authErr) return authErr;
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const { id } = await Promise.resolve(params);
 

@@ -1,4 +1,5 @@
 import { getDatabase } from "@/lib/database";
+import { formatInventoryCategory } from "@/constants/inventoryCategories";
 
 export interface InventoryAlert {
   productId: string;
@@ -62,7 +63,7 @@ export function getLowStockAlerts(): InventoryAlert[] {
         minStock: product.minStock,
         unit: product.unit,
         supplier: product.supplier,
-        category: product.category,
+        category: formatInventoryCategory(product.categoryGroup, product.category),
         type: product.type,
         stockPercentage: Math.round(stockPercentage),
         needsRestock: product.currentStock < product.minStock
@@ -93,7 +94,7 @@ export function calculateInventoryValue(): InventoryValue {
       packedProductsValue += productValue;
     }
 
-    const category = product.category;
+    const category = formatInventoryCategory(product.categoryGroup, product.category);
     if (!categoryMap.has(category)) {
       categoryMap.set(category, { value: 0, itemCount: 0 });
     }

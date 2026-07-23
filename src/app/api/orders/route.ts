@@ -7,6 +7,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { ensureAdmin } from "@/lib/auth";
 import { verifyCustomerAuth } from "@/lib/customerAuthMiddleware";
+import { validateOrderItemsInventory } from "@/services/productsService";
 
 initializeDatabase();
 
@@ -86,6 +87,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Order must contain at least one item" },
         { status: 400 }
+      );
+    }
+
+    const inventoryCheck = validateOrderItemsInventory(items);
+    if (!inventoryCheck.valid) {
+      return NextResponse.json(
+        {
+          error: "عدم موجودی",
+          unavailableItems: inventoryCheck.unavailableItems,
+        },
+        { status: 409 }
       );
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireSuperAdminAccess } from "@/lib/adminApiAuth";
 import * as productsService from "@/services/productsService";
 
 /**
@@ -12,15 +12,8 @@ export async function GET(
   { params }: { params: { rawMaterialId: string } }
 ) {
   try {
-    const { user, error } = validateSession(request);
-
-    if (error) {
-      return error;
-    }
-
-    if (user?.role !== "super_admin") {
-      return NextResponse.json({ error: "شما دسترسی ندارید" }, { status: 403 });
-    }
+    const auth = requireSuperAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     // Use unified productsService - rawMaterialId is the same as productId
     const menuItems = productsService.getMenuItemsUsingProduct(params.rawMaterialId);
@@ -29,16 +22,24 @@ export async function GET(
     const product = productsService.getProduct(params.rawMaterialId);
     
     // Transform to match expected format
-    const usage = menuItems.map(item => ({
-      id: item.menuItemId,
-      menu_item_id: item.menuItemId, // For backward compatibility
-      menuItemName: item.menuItemName,
-      quantity: item.quantity,
-      unit: item.unit,
-      current_stock: product?.currentStock || 0,
-      price: product?.price || 0,
-      itemCost: (item.quantity * (product?.price || 0))
-    }));
+    const usage = menuItems.map(item => {
+      const itemCost = item.quantity * (product?.price || 0);
+      const menuItemPrice = item.menuItemPrice || 0;
+      const costPercent =
+        menuItemPrice > 0 ? Math.round((itemCost / menuItemPrice) * 100) : null;
+      return {
+        id: item.menuItemId,
+        menu_item_id: item.menuItemId,
+        menuItemName: item.menuItemName,
+        menuItemPrice,
+        quantity: item.quantity,
+        unit: item.unit,
+        current_stock: product?.currentStock || 0,
+        price: product?.price || 0,
+        itemCost,
+        costPercent,
+      };
+    });
 
     return NextResponse.json({
       success: true,

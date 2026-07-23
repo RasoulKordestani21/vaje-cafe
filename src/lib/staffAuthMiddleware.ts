@@ -67,5 +67,17 @@ export function ensureStaff(
   return null; // Authorized
 }
 
+export function clearStaffAuthCookie(response: NextResponse): NextResponse {
+  response.cookies.set({
+    name: "staff_token",
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 0,
+    path: "/"
+  });
+  return response;
+}
 
 

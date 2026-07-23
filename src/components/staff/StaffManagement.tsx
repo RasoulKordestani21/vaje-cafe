@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { formatJalaliDate, timestampToJalali } from "@/utils/jalaliDateUtils";
 import { toPersianDigits } from "@/utils/format";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface Staff {
   id: string;
@@ -34,10 +36,11 @@ interface StaffManagementProps {
 }
 
 const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
+  const { success, error: showError, warning } = useToast();
+  const confirm = useConfirm();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [formData, setFormData] = useState({
@@ -52,7 +55,6 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
 
   const fetchStaff = async () => {
     setLoading(true);
-    setError(null);
     try {
       const response = await fetch("/api/staff", {
         headers: getAuthHeaders(),
@@ -64,7 +66,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
       setStaff(data.staff || []);
     } catch (err: any) {
       console.error("Failed to fetch staff:", err);
-      setError(err.message);
+      showError(err.message || "خطا در بارگذاری کارمندان");
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,6 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     try {
       const url = editingStaff
@@ -110,7 +111,7 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
 
       if (!editingStaff || formData.password) {
         if (!formData.password) {
-          setError("رمز عبور الزامی است");
+          warning("رمز عبور الزامی است");
           return;
         }
         payload.password = formData.password;
@@ -128,14 +129,14 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
       if (response.ok) {
         await fetchStaff();
         handleCancel();
-        alert(editingStaff ? "کارمند با موفقیت ویرایش شد" : "کارمند با موفقیت اضافه شد");
+        success(editingStaff ? "کارمند با موفقیت ویرایش شد" : "کارمند با موفقیت اضافه شد");
       } else {
         const errorData = await response.json();
-        setError(errorData.error || "خطا در ذخیره");
+        showError(errorData.error || "خطا در ذخیره");
       }
     } catch (err: any) {
       console.error("Failed to save staff:", err);
-      setError("خطا در ذخیره");
+      showError("خطا در ذخیره");
     }
   };
 
@@ -154,7 +155,13 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا از حذف این کارمند اطمینان دارید؟")) return;
+    const ok = await confirm({
+      title: "حذف کارمند",
+      message: "آیا از حذف این کارمند اطمینان دارید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/staff/${id}`, {
@@ -164,13 +171,13 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
 
       if (response.ok) {
         await fetchStaff();
-        alert("کارمند با موفقیت حذف شد");
+        success("کارمند با موفقیت حذف شد");
       } else {
-        alert("خطا در حذف کارمند");
+        showError("خطا در حذف کارمند");
       }
     } catch (err) {
       console.error("Failed to delete staff:", err);
-      alert("خطا در حذف کارمند");
+      showError("خطا در حذف کارمند");
     }
   };
 
@@ -186,7 +193,6 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
       branch_id: "",
       is_active: true,
     });
-    setError(null);
   };
 
   const getRoleLabel = (role: string) => {
@@ -370,12 +376,6 @@ const StaffManagement: React.FC<StaffManagementProps> = ({ isDark }) => {
                       فعال
                     </span>
                   </label>
-                </div>
-              )}
-
-              {error && (
-                <div className={cn("text-sm p-2 rounded", isDark ? "bg-red-900/30 text-red-400" : "bg-red-50 text-red-600")}>
-                  {error}
                 </div>
               )}
 

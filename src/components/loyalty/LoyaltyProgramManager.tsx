@@ -23,6 +23,9 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
+import { adminFetchInit } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface LoyaltyReward {
   id: string;
@@ -43,9 +46,10 @@ interface LoyaltyProgramManagerProps {
 }
 
 const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = true }) => {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingReward, setEditingReward] = useState<LoyaltyReward | null>(null);
   const [formData, setFormData] = useState({
@@ -67,18 +71,16 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
   const fetchRewards = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/loyalty/rewards?active_only=false", {
-        credentials: "include",
-      });
+      const response = await fetch("/api/loyalty/rewards?active_only=false", adminFetchInit());
       if (response.ok) {
         const data = await response.json();
         setRewards(data.rewards || []);
       } else {
-        setError("خطا در دریافت پاداش‌ها");
+        showError("خطا در دریافت پاداش‌ها");
       }
     } catch (err) {
       console.error("Failed to fetch rewards:", err);
-      setError("خطا در دریافت پاداش‌ها");
+      showError("خطا در دریافت پاداش‌ها");
     } finally {
       setLoading(false);
     }
@@ -131,7 +133,6 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setError(null);
 
     try {
       const url = editingReward
@@ -157,10 +158,11 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
 
       const response = await fetch(url, {
         method,
+        ...adminFetchInit(),
         headers: {
+          ...(adminFetchInit().headers as Record<string, string>),
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify(body),
       });
 
@@ -171,32 +173,38 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
 
       handleCloseDialog();
       fetchRewards();
+      success(editingReward ? "پاداش با موفقیت ویرایش شد" : "پاداش با موفقیت اضافه شد");
     } catch (err: any) {
-      setError(err.message || "خطا در ذخیره پاداش");
+      showError(err.message || "خطا در ذخیره پاداش");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا مطمئن هستید که می‌خواهید این پاداش را حذف کنید؟")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "حذف پاداش",
+      message: "آیا مطمئن هستید که می‌خواهید این پاداش را حذف کنید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
 
     try {
       const response = await fetch(`/api/loyalty/rewards/${id}`, {
         method: "DELETE",
-        credentials: "include",
+        ...adminFetchInit(),
       });
 
       if (response.ok) {
         fetchRewards();
+        success("پاداش با موفقیت حذف شد");
       } else {
-        alert("خطا در حذف پاداش");
+        showError("خطا در حذف پاداش");
       }
     } catch (err) {
       console.error("Failed to delete reward:", err);
-      alert("خطا در حذف پاداش");
+      showError("خطا در حذف پاداش");
     }
   };
 
@@ -204,10 +212,11 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
     try {
       const response = await fetch(`/api/loyalty/rewards/${reward.id}`, {
         method: "PUT",
+        ...adminFetchInit(),
         headers: {
+          ...(adminFetchInit().headers as Record<string, string>),
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({
           is_active: !reward.is_active,
         }),
@@ -278,11 +287,6 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
 
               <div>
                 <Label className={cn(isDark ? "text-gray-300" : "text-gray-700", "mb-2 block")}>
@@ -461,12 +465,6 @@ const LoyaltyProgramManager: React.FC<LoyaltyProgramManagerProps> = ({ isDark = 
           </DialogContent>
         </Dialog>
       </div>
-
-      {error && (
-        <div className="p-4 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400">
-          {error}
-        </div>
-      )}
 
       {rewards.length === 0 ? (
         <Card className={cn(isDark ? "bg-neutral-900 border-white/10" : "bg-white border-gray-200")}>

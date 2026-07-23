@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Star, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCustomer } from "@/context/CustomerContext";
+import { useToast } from "@/components/ui/toast";
 
 interface ExperienceCommentsProps {
   isDark?: boolean;
@@ -15,6 +16,7 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
   onCommentSubmitted,
 }) => {
   const { customer, isAuthenticated } = useCustomer();
+  const { warning, error: showError } = useToast();
   const [rating, setRating]           = useState(0);
   const [hovered, setHovered]         = useState(0);
   const [commentText, setCommentText] = useState("");
@@ -22,7 +24,6 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
   const [customerPhone, setCustomerPhone] = useState(customer?.phoneNumber || "");
   const [submitting, setSubmitting]   = useState(false);
   const [success, setSuccess]         = useState(false);
-  const [error, setError]             = useState<string | null>(null);
 
   const inputCls = cn(
     "w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition-all",
@@ -39,11 +40,10 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (rating < 1) { setError("لطفاً امتیاز خود را انتخاب کنید"); return; }
-    if (!commentText.trim()) { setError("لطفاً نظر خود را بنویسید"); return; }
+    if (rating < 1) { warning("لطفاً امتیاز خود را انتخاب کنید"); return; }
+    if (!commentText.trim()) { warning("لطفاً نظر خود را بنویسید"); return; }
 
     setSubmitting(true);
-    setError(null);
     try {
       const res = await fetch("/api/experience-comments", {
         method: "POST",
@@ -66,7 +66,7 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
       setTimeout(() => setSuccess(false), 4000);
       onCommentSubmitted?.();
     } catch (err: any) {
-      setError(err.message || "خطا در ثبت نظر");
+      showError(err.message || "خطا در ثبت نظر");
     } finally {
       setSubmitting(false);
     }
@@ -88,17 +88,6 @@ const ExperienceComments: React.FC<ExperienceCommentsProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-
-      {error && (
-        <div className={cn(
-          "text-sm px-3.5 py-2.5 rounded-xl border",
-          isDark
-            ? "bg-red-950/40 border-red-900/40 text-red-400"
-            : "bg-red-50 border-red-200 text-red-600"
-        )}>
-          {error}
-        </div>
-      )}
 
       {/* ── Rating ──────────────────────────────────────────────────── */}
       <div>

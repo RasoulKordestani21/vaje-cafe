@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeDatabase, getDatabase, formatTimestamp } from '@/lib/database';
 import { compressAndSaveImage } from '@/lib/imageService';
-import { ensureAdmin } from '@/lib/auth';
+import { requireAdminAccess } from '@/lib/adminApiAuth';
+import { getMenuItemsStockStatus } from '@/services/productsService';
 import { v4 as uuidv4 } from 'uuid';
 
 // Initialize database on first call
@@ -15,11 +16,14 @@ export async function GET() {
       SELECT * FROM menu_items ORDER BY is_pinned DESC, is_suggested DESC, display_order ASC, category, name
     `).all();
 
+    const stockStatus = getMenuItemsStockStatus();
+
     const formattedItems = (items as any[]).map(item => ({
       ...item,
       createdAt: formatTimestamp(item.createdAt),
       updatedAt: formatTimestamp(item.updatedAt),
       available: Boolean(item.available),
+      inStockFromInventory: stockStatus[item.id] ?? true,
       is_pinned: Boolean(item.is_pinned),
       is_suggested: Boolean(item.is_suggested),
     }));
@@ -37,8 +41,8 @@ export async function GET() {
 // POST new menu item
 export async function POST(request: NextRequest) {
   // Require admin token for creating menu items
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
   try {
     const db = getDatabase();
     const formData = await request.formData();

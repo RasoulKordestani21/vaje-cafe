@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase, formatTimestamp } from "@/lib/database";
-import { ensureAdmin } from "@/lib/auth";
-import { compressAndSaveImage, validateImage } from "@/lib/imageService";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
+import { compressAndSaveImage, validateImage, deleteMediaByUrl } from "@/lib/imageService";
 
 // GET single gallery with photos
 export async function GET(
@@ -53,8 +53,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
@@ -66,6 +66,7 @@ export async function PUT(
     const display_order = formData.get('display_order') as string;
     const is_active = formData.get('is_active') as string;
     const coverImageFile = formData.get('cover_image') as File | null;
+    const removeCover = formData.get('remove_cover') === 'true';
 
     const existing = db.prepare("SELECT * FROM photo_galleries WHERE id = ?").get(id) as any;
     if (!existing) {
@@ -90,6 +91,9 @@ export async function PUT(
 
     // Handle cover image upload if provided
     if (coverImageFile && coverImageFile.size > 0) {
+      if (existing.cover_image) {
+        deleteMediaByUrl(existing.cover_image);
+      }
       const buffer = Buffer.from(await coverImageFile.arrayBuffer());
       validateImage(buffer, coverImageFile.type);
       const { url } = await compressAndSaveImage(buffer, coverImageFile.name, {
@@ -99,6 +103,12 @@ export async function PUT(
       });
       updateFields.push("cover_image = ?");
       updateValues.push(url);
+    } else if (removeCover) {
+      if (existing.cover_image) {
+        deleteMediaByUrl(existing.cover_image);
+      }
+      updateFields.push("cover_image = ?");
+      updateValues.push(null);
     } else if (formData.has('cover_image') && coverImageFile === null) {
       // Explicitly set to null if cover_image field exists but is empty
       updateFields.push("cover_image = ?");
@@ -154,8 +164,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authErr = ensureAdmin(request);
-  if (authErr) return authErr;
+  const auth = requireAdminAccess(request);
+  if (!auth.authorized) return auth.error;
 
   try {
     const db = getDatabase();
@@ -167,6 +177,15 @@ export async function DELETE(
         { error: "Gallery not found" },
         { status: 404 }
       );
+    }
+
+    const photos = db.prepare("SELECT image_url FROM photos WHERE gallery_id = ?").all(id) as Array<{ image_url: string }>;
+
+    for (const photo of photos) {
+      if (photo.image_url) deleteMediaByUrl(photo.image_url);
+    }
+    if ((existing as { cover_image?: string }).cover_image) {
+      deleteMediaByUrl((existing as { cover_image: string }).cover_image);
     }
 
     // Delete gallery (photos will be deleted via CASCADE)

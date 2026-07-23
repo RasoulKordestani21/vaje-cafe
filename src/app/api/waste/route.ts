@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/database";
-import { validateSession } from "@/lib/authMiddleware";
+import { requireAdminAccess } from "@/lib/adminApiAuth";
 import crypto from "crypto";
 
 // GET all waste records
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const { searchParams } = new URL(request.url);
@@ -167,14 +161,8 @@ export async function GET(request: NextRequest) {
 // POST create new waste record
 export async function POST(request: NextRequest) {
   try {
-    const { user, error } = validateSession(request);
-    if (error || !user) {
-      return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (user.role !== "admin" && user.role !== "super_admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
+    const auth = requireAdminAccess(request);
+    if (!auth.authorized) return auth.error;
 
     const db = getDatabase();
     const body = await request.json();
@@ -227,8 +215,8 @@ export async function POST(request: NextRequest) {
       cost_per_unit,
       total_cost,
       reason || null,
-      user.id,
-      user.name || "Admin",
+      auth.userId,
+      "Admin",
       now,
       now
     );

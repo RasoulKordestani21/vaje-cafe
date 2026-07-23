@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { adminFetchInit } from "@/services/dbService";
 
 interface Branch {
   id: string;
@@ -22,6 +25,8 @@ interface BranchesManagementProps {
 }
 
 const BranchesManagement: React.FC<BranchesManagementProps> = ({ isDark }) => {
+  const { success, error: showError } = useToast();
+  const confirm = useConfirm();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -44,9 +49,12 @@ const BranchesManagement: React.FC<BranchesManagementProps> = ({ isDark }) => {
       if (res.ok) {
         const data = await res.json();
         setBranches(data);
+      } else {
+        showError("خطا در بارگذاری شعب");
       }
     } catch (error) {
       console.error("Failed to fetch branches:", error);
+      showError("خطا در بارگذاری شعب");
     } finally {
       setLoading(false);
     }
@@ -58,38 +66,44 @@ const BranchesManagement: React.FC<BranchesManagementProps> = ({ isDark }) => {
       if (editingBranch) {
         const res = await fetch(`/api/branches/${editingBranch.id}`, {
           method: "PUT",
+          ...adminFetchInit(),
           headers: {
+            ...(adminFetchInit().headers as Record<string, string>),
             "Content-Type": "application/json",
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
           },
-          body: JSON.stringify(formData)
+          body: JSON.stringify(formData),
         });
         if (res.ok) {
-          alert("شعبه با موفقیت بروزرسانی شد");
+          success("شعبه با موفقیت بروزرسانی شد");
           setShowForm(false);
           setEditingBranch(null);
           setFormData({ name: "", address: "", phone: "", email: "", isActive: true });
           fetchBranches();
+        } else {
+          showError("خطا در بروزرسانی شعبه");
         }
       } else {
         const res = await fetch("/api/branches", {
           method: "POST",
+          ...adminFetchInit(),
           headers: {
+            ...(adminFetchInit().headers as Record<string, string>),
             "Content-Type": "application/json",
-            "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
           },
-          body: JSON.stringify(formData)
+          body: JSON.stringify(formData),
         });
         if (res.ok) {
-          alert("شعبه با موفقیت ایجاد شد");
+          success("شعبه با موفقیت ایجاد شد");
           setShowForm(false);
           setFormData({ name: "", address: "", phone: "", email: "", isActive: true });
           fetchBranches();
+        } else {
+          showError("خطا در ایجاد شعبه");
         }
       }
     } catch (error) {
       console.error("Error saving branch:", error);
-      alert("خطا در ذخیره‌سازی شعبه");
+      showError("خطا در ذخیره‌سازی شعبه");
     }
   };
 
@@ -106,24 +120,28 @@ const BranchesManagement: React.FC<BranchesManagementProps> = ({ isDark }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("آیا از حذف این شعبه اطمینان دارید؟")) return;
+    const ok = await confirm({
+      title: "حذف شعبه",
+      message: "آیا از حذف این شعبه اطمینان دارید؟",
+      confirmLabel: "حذف",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/branches/${id}`, {
         method: "DELETE",
-        headers: {
-          "x-access-token": process.env.NEXT_PUBLIC_ADMIN_TOKEN || ""
-        }
+        ...adminFetchInit(),
       });
       if (res.ok) {
-        alert("شعبه با موفقیت حذف شد");
+        success("شعبه با موفقیت حذف شد");
         fetchBranches();
       } else {
         const error = await res.json();
-        alert(error.error || "خطا در حذف شعبه");
+        showError(error.error || "خطا در حذف شعبه");
       }
     } catch (error) {
       console.error("Error deleting branch:", error);
-      alert("خطا در حذف شعبه");
+      showError("خطا در حذف شعبه");
     }
   };
 

@@ -22,6 +22,7 @@ import PaginationControls from "@/components/ui/PaginationControls";
 import { formatToman, toPersianDigits } from "@/utils/format";
 import { timestampToJalaliString, formatPersianNumber } from "@/utils/dateFormatter";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import {
   adminCard,
@@ -185,6 +186,7 @@ function getStatusBadge(status: string, isDark: boolean) {
 }
 
 export default function CustomersManagement({ isDark }: CustomersManagementProps) {
+  const { success, error: showError } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -303,13 +305,14 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
 
       if (response.ok) {
         await fetchCustomers();
+        success("نام مشتری با موفقیت به‌روزرسانی شد");
         closeEditModal();
       } else {
-        alert("خطا در به‌روزرسانی نام");
+        showError("خطا در به‌روزرسانی نام");
       }
     } catch (error) {
       console.error("Error updating customer name:", error);
-      alert("خطا در به‌روزرسانی نام");
+      showError("خطا در به‌روزرسانی نام");
     } finally {
       setIsSaving(false);
     }
@@ -319,7 +322,7 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
     const search = searchTerm.toLowerCase();
     return customers.filter(customer => {
       const matchesSearch =
-        (customer.name?.toLowerCase().includes(search) || false) ||
+      (customer.name?.toLowerCase().includes(search) || false) ||
         customer.phone?.includes(search) ||
         (customer.email?.toLowerCase().includes(search) || false);
       if (!matchesSearch) return false;
@@ -368,7 +371,7 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
           </p>
         </div>
 
-        <div className="relative">
+            <div className="relative">
           <Search
             className={cn(
               "absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none",
@@ -376,18 +379,18 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
             )}
             size={18}
           />
-          <Input
-            placeholder="جستجو بر اساس نام، شماره تلفن یا ایمیل..."
-            value={searchTerm}
+              <Input
+                placeholder="جستجو بر اساس نام، شماره تلفن یا ایمیل..."
+                value={searchTerm}
             onChange={e => {
               setSearchTerm(e.target.value);
               setCurrentPage(1);
             }}
             className={cn(inputClass, "pr-10")}
             dir="rtl"
-          />
-        </div>
-      </div>
+              />
+            </div>
+          </div>
 
       {/* Summary strip */}
       {!isLoading && !fetchError && (
@@ -445,22 +448,22 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
       )}
 
       {/* Table */}
-      {isLoading ? (
+          {isLoading ? (
         <div className={cn("text-center py-14 text-sm", adminTextMuted(isDark))}>
           در حال بارگذاری...
         </div>
       ) : fetchError ? (
         <div className="text-center py-14 text-sm text-red-500">{fetchError}</div>
-      ) : filteredCustomers.length === 0 ? (
+          ) : filteredCustomers.length === 0 ? (
         <div className={cn("text-center py-14 text-sm", adminTextMuted(isDark))}>
           {searchTerm || loyaltyFilter !== "all"
             ? "مشتری‌ای با این فیلتر یافت نشد"
             : "هنوز مشتری‌ای ثبت نشده است"}
-        </div>
-      ) : (
+            </div>
+          ) : (
         <div className={cn("overflow-x-auto rounded-2xl border", adminTableWrap(isDark))}>
-          <Table>
-            <TableHeader>
+              <Table>
+                <TableHeader>
               <TableRow className={adminTableHead(isDark)}>
                 <TableHead className={cn("text-right w-12", adminTextMuted(isDark))} />
                 <TableHead className={cn("text-right", adminTextMuted(isDark))}>نام</TableHead>
@@ -482,9 +485,9 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                 <TableHead className={cn("text-right w-24", adminTextMuted(isDark))}>
                   عملیات
                 </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
               {paginatedCustomers.map((customer, index) => {
                 const rowNum = (safePage - 1) * ITEMS_PER_PAGE + index + 1;
                 return (
@@ -521,8 +524,8 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                     <TableCell className={adminTextSecondary(isDark)}>
                       {customer.email || "—"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                         <Star size={14} className="text-yellow-500 fill-yellow-500 shrink-0" />
                         <span
                           className={cn(
@@ -533,9 +536,9 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                           {toPersianDigits(
                             (customer.loyalty_points_balance || 0).toString()
                           )}
-                        </span>
-                      </div>
-                    </TableCell>
+                          </span>
+                        </div>
+                      </TableCell>
                     <TableCell>
                       {(() => {
                         const status = loyaltyStatusLabel(customer);
@@ -606,7 +609,7 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                         {toPersianDigits(customer.totalOrders.toString())}
                       </span>
                     </TableCell>
-                    <TableCell>
+                      <TableCell>
                       <span
                         className={cn(
                           "font-semibold text-sm",
@@ -617,15 +620,15 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                       </span>
                     </TableCell>
                     <TableCell className={cn("text-sm", adminTextSecondary(isDark))}>
-                      {customer.lastOrderDate
-                        ? timestampToJalaliString(customer.lastOrderDate)
+                        {customer.lastOrderDate
+                          ? timestampToJalaliString(customer.lastOrderDate)
                         : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Button
+                      </TableCell>
+                      <TableCell>
+                        <Button
                         type="button"
-                        variant="ghost"
-                        size="sm"
+                          variant="ghost"
+                          size="sm"
                         onClick={() => openEditModal(customer)}
                         className={cn(
                           "h-8 gap-1 text-xs",
@@ -636,15 +639,15 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                       >
                         <Edit size={14} />
                         ویرایش
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                 );
               })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
       {/* Pagination */}
       {totalPages > 1 && !isLoading && !fetchError && (
@@ -710,7 +713,7 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                   adminDivider(isDark)
                 )}
               >
-                <div>
+              <div>
                   <div className={cn("text-xs mb-1", adminTextMuted(isDark))}>
                     امتیاز وفاداری
                   </div>
@@ -734,9 +737,9 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                   </div>
                   <div className={cn("text-base font-semibold", adminTextPrimary(isDark))}>
                     {toPersianDigits(selectedCustomer.totalOrders.toString())}
-                  </div>
                 </div>
-                <div>
+              </div>
+              <div>
                   <div className={cn("text-xs mb-1", adminTextMuted(isDark))}>مجموع خرید</div>
                   <div
                     className={cn(
@@ -746,12 +749,12 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                   >
                     {formatToman(selectedCustomer.totalSpent)}
                   </div>
-                </div>
-                <div>
+              </div>
+              <div>
                   <div className={cn("text-xs mb-1", adminTextMuted(isDark))}>آخرین سفارش</div>
                   <div className={cn("text-sm", adminTextPrimary(isDark))}>
-                    {selectedCustomer.lastOrderDate
-                      ? timestampToJalaliString(selectedCustomer.lastOrderDate)
+                  {selectedCustomer.lastOrderDate
+                    ? timestampToJalaliString(selectedCustomer.lastOrderDate)
                       : "—"}
                   </div>
                 </div>
@@ -771,11 +774,11 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                       </span>
                     )}
                   </div>
-                </div>
               </div>
+            </div>
 
               {/* Loyalty full report */}
-              <div>
+            <div>
                 <h3 className={cn("text-sm font-bold mb-3 flex items-center gap-2", adminTextPrimary(isDark))}>
                   <Gift size={16} className="text-coffee-500" />
                   گزارش کامل برنامه وفاداری
@@ -788,8 +791,8 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                   <p className={cn("text-sm", adminTextMuted(isDark))}>
                     این مشتری هنوز در برنامه وفاداری فعالیتی نداشته است
                   </p>
-                ) : (
-                  <div className="space-y-4">
+              ) : (
+                <div className="space-y-4">
                     {/* Earn breakdown */}
                     {loyaltySummary && (
                       <div
@@ -812,7 +815,7 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                               <span className={adminTextMuted(isDark)}>{row.label}: </span>
                               <span className={cn("font-semibold", isDark ? "text-emerald-400" : "text-emerald-600")}>
                                 +{toPersianDigits(String(row.value))}
-                              </span>
+                        </span>
                             </div>
                           ))}
                       </div>
@@ -1015,14 +1018,14 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                         })}
                       </TableBody>
                     </Table>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
               <div className={cn("border-t pt-4", adminDivider(isDark))}>
                 <div className={cn("flex items-center gap-2 text-sm", adminTextMuted(isDark))}>
                   <MessageSquare className="h-4 w-4 shrink-0" />
-                  <span>ارسال پیام (در حال توسعه)</span>
+                <span>ارسال پیام (در حال توسعه)</span>
                 </div>
               </div>
             </div>
@@ -1044,16 +1047,16 @@ export default function CustomersManagement({ isDark }: CustomersManagementProps
                   : "border-admin-border text-admin-secondary hover:bg-admin-muted"
               )}
             >
-              انصراف
-            </Button>
+                انصراف
+              </Button>
             <Button
               onClick={handleSaveName}
               disabled={isSaving}
               className="bg-coffee-600 hover:bg-coffee-500 text-white"
             >
               {isSaving ? "در حال ذخیره..." : "ذخیره تغییرات"}
-            </Button>
-          </div>
+              </Button>
+            </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { getAuthHeaders } from "@/services/dbService";
+import { useToast } from "@/components/ui/toast";
 
 interface Permission {
   id: string;
@@ -32,11 +33,10 @@ const ROLES = {
 };
 
 export default function StaffRolePermissions({ isDark }: StaffRolePermissionsProps) {
+  const { success, error: showError } = useToast();
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     fetchPermissions();
@@ -44,7 +44,6 @@ export default function StaffRolePermissions({ isDark }: StaffRolePermissionsPro
 
   const fetchPermissions = async () => {
     setLoading(true);
-    setError(null);
     try {
       const response = await fetch("/api/staff/permissions", {
         headers: getAuthHeaders(),
@@ -56,7 +55,7 @@ export default function StaffRolePermissions({ isDark }: StaffRolePermissionsPro
       setPermissions(data.permissions || []);
     } catch (err: any) {
       console.error("Failed to fetch permissions:", err);
-      setError(err.message);
+      showError(err.message || "خطا در بارگذاری دسترسی‌ها");
     } finally {
       setLoading(false);
     }
@@ -74,8 +73,6 @@ export default function StaffRolePermissions({ isDark }: StaffRolePermissionsPro
 
   const handleSave = async () => {
     setSaving(true);
-    setError(null);
-    setSuccess(false);
 
     try {
       const updates = permissions.map((p) => ({
@@ -98,11 +95,10 @@ export default function StaffRolePermissions({ isDark }: StaffRolePermissionsPro
         throw new Error(error.error || "Failed to save permissions");
       }
 
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      success("تغییرات با موفقیت ذخیره شد");
     } catch (err: any) {
       console.error("Failed to save permissions:", err);
-      setError(err.message);
+      showError(err.message || "خطا در ذخیره دسترسی‌ها");
     } finally {
       setSaving(false);
     }
@@ -149,18 +145,6 @@ export default function StaffRolePermissions({ isDark }: StaffRolePermissionsPro
           )}
         </Button>
       </div>
-
-      {error && (
-        <div className="p-4 rounded-lg bg-red-900/30 border border-red-900/50 text-red-400">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="p-4 rounded-lg bg-green-900/30 border border-green-900/50 text-green-400">
-          تغییرات با موفقیت ذخیره شد
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {(Object.keys(ROLES) as Array<keyof typeof ROLES>).map((role) => (

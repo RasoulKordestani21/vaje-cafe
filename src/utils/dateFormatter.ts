@@ -116,13 +116,15 @@ export function formatDailyDataForChart(
     sales?: number;
   }>
 ) {
-  return dailyData.map(stat => ({
-    ...stat,
-    dateDisplay: isoDateToJalaliDisplay(stat.date),
-    orders: stat.orders || 0,
-    sales: stat.sales || 0,
-    visits: stat.visits || 0
-  }));
+  return [...dailyData]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(stat => ({
+      ...stat,
+      dateDisplay: isoDateToJalaliDisplay(stat.date),
+      orders: stat.orders || 0,
+      sales: stat.sales || 0,
+      visits: stat.visits || 0
+    }));
 }
 
 export default {

@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 
 interface ManualOrderFormProps {
   items: MenuItem[];
@@ -39,6 +40,7 @@ export const ManualOrderForm: React.FC<ManualOrderFormProps> = ({
   onSubmit,
   onClose
 }) => {
+  const { warning } = useToast();
   const [externalProducts, setExternalProducts] = useState<ExternalProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productSearch, setProductSearch] = useState("");
@@ -154,11 +156,11 @@ export const ManualOrderForm: React.FC<ManualOrderFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim()) {
-      alert("لطفا نام مشتری را وارد کنید");
+      warning("لطفا نام مشتری را وارد کنید");
       return;
     }
     if (selectedItems.length === 0) {
-      alert("لطفا حداقل یک محصول را انتخاب کنید");
+      warning("لطفا حداقل یک محصول را انتخاب کنید");
       return;
     }
 

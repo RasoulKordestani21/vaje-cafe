@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatToman, toPersianDigits } from "@/utils/format";
+import { useToast } from "@/components/ui/toast";
 import { formatJalaliDate } from "@/utils/jalaliDateUtils";
 import { timestampToJalali } from "@/utils/jalaliDateUtils";
 
@@ -32,6 +33,7 @@ interface KitchenDisplayProps {
 }
 
 const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ isDark = true }) => {
+  const { error: showError } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -73,11 +75,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ isDark = true }) => {
       if (response.ok) {
         fetchOrders(); // Refresh orders
       } else {
-        alert("خطا در بروزرسانی وضعیت سفارش");
+        showError("خطا در بروزرسانی وضعیت سفارش");
       }
     } catch (error) {
       console.error("Failed to update order status:", error);
-      alert("خطا در بروزرسانی وضعیت سفارش");
+      showError("خطا در بروزرسانی وضعیت سفارش");
     }
   };
 

@@ -10,34 +10,20 @@ import {
   ChefHat,
   Bell,
   Search,
-  ChevronLeft,
-  Menu,
   Plus,
   X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  adminDropdown,
   adminIconBtn,
-  adminInput,
-  adminTextMuted,
-  adminTextPrimary
+  adminInput
 } from "@/lib/adminTheme";
 import { DashboardPage } from "@/components/dashboard/DashboardSidebar";
 import {
   ADMIN_PAGE_META,
-  ADMIN_ROLE_LABELS,
   searchAdminPages
 } from "@/lib/adminPageMeta";
 import { toPersianDigits } from "@/utils/format";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
 
 export interface QuickAction {
   label: string;
@@ -48,16 +34,12 @@ export interface QuickAction {
 
 interface DashboardHeaderProps {
   isDark: boolean;
-  activePage: DashboardPage;
   onLogout: () => void;
   onToggleTheme: () => void;
   pendingOrdersCount?: number;
-  userName?: string;
-  userRole?: string | null;
   onNavigate: (page: DashboardPage) => void;
   onGlobalSearch?: (query: string) => void;
   quickActions?: QuickAction[];
-  onMenuToggle?: () => void;
 }
 
 const iconBtn = (isDark: boolean) =>
@@ -68,16 +50,12 @@ const iconBtn = (isDark: boolean) =>
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isDark,
-  activePage,
   onLogout,
   onToggleTheme,
   pendingOrdersCount = 0,
-  userName = "مدیر سیستم",
-  userRole,
   onNavigate,
   onGlobalSearch,
-  quickActions = [],
-  onMenuToggle
+  quickActions = []
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -85,15 +63,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const searchRef = useRef<HTMLDivElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
 
-  const pageMeta = ADMIN_PAGE_META[activePage] ?? ADMIN_PAGE_META.dashboard;
-  const roleLabel = userRole ? ADMIN_ROLE_LABELS[userRole] ?? userRole : "کاربر";
   const searchResults = searchAdminPages(searchQuery);
-  const initials = userName
-    .split(" ")
-    .slice(0, 2)
-    .map(w => w[0])
-    .join("")
-    .slice(0, 2);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -172,72 +142,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
     ) : null;
 
-  const UserAvatar = ({ size = "md" }: { size?: "sm" | "md" }) => (
-    <div
-      className={cn(
-        "rounded-full flex items-center justify-center font-bold shrink-0",
-        size === "sm" ? "w-8 h-8 text-xs" : "w-9 h-9 text-sm",
-        isDark ? "bg-coffee-600/30 text-coffee-300" : "bg-coffee-100 text-coffee-700"
-      )}
-    >
-      {initials || "م"}
-    </div>
-  );
-
   return (
     <div className="relative w-full">
-      {/* Main header row */}
       <div className="flex items-center gap-2 md:gap-3 w-full min-w-0">
-        {/* Sidebar toggle — tablet & mobile */}
-        {onMenuToggle && (
-          <button
-            type="button"
-            onClick={onMenuToggle}
-            className={cn(iconBtn(isDark), "lg:hidden")}
-            aria-label="باز کردن منو"
-          >
-            <Menu size={18} />
-          </button>
-        )}
-
-        {/* Page context — title always; breadcrumb desktop only */}
-        <div className="flex-1 min-w-0">
-          {/* Full breadcrumb — large screens only */}
-          <nav
-            className={cn(
-              "hidden xl:flex items-center gap-1 text-[11px] mb-0.5 truncate",
-              adminTextMuted(isDark)
-            )}
-            aria-label="مسیر"
-          >
-            <span className="shrink-0">پنل مدیریت</span>
-            <ChevronLeft size={11} className="opacity-50 shrink-0" />
-            <span className="shrink-0">{pageMeta.group}</span>
-            <ChevronLeft size={11} className="opacity-50 shrink-0" />
-            <span className={cn("truncate", isDark ? "text-gray-400" : "text-gray-500")}>
-              {pageMeta.breadcrumb}
-            </span>
-          </nav>
-
-          {/* Compact group label — tablet only */}
-          <p
-            className={cn(
-              "hidden md:block xl:hidden text-[10px] truncate mb-0.5",
-              isDark ? "text-gray-500" : "text-admin-muted-text"
-            )}
-          >
-            {pageMeta.group}
-          </p>
-
-          <h1
-            className={cn(
-              "font-bold truncate leading-tight text-sm md:text-base",
-              adminTextPrimary(isDark)
-            )}
-          >
-            {pageMeta.title}
-          </h1>
-        </div>
+        <div className="flex-1 min-w-0" />
 
         {/* Desktop / tablet search */}
         <div
@@ -346,97 +254,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {/* Profile — desktop: inline with name */}
-          <div
-            className={cn(
-              "hidden xl:flex items-center gap-2 mr-0.5 pl-2 border-r",
-              isDark ? "border-white/10" : "border-admin-border"
-            )}
-          >
-            <UserAvatar />
-            <div className="min-w-0 max-w-[120px]">
-              <p
-                className={cn(
-                  "text-sm font-semibold truncate leading-tight",
-                  isDark ? "text-white" : "text-gray-900"
-                )}
-              >
-                {userName}
-              </p>
-              <p
-                className={cn(
-                  "text-[11px] truncate",
-                  isDark ? "text-gray-500" : "text-admin-muted-text"
-                )}
-              >
-                {roleLabel}
-              </p>
-            </div>
-          </div>
-
-          {/* Profile — mobile & tablet: avatar dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(iconBtn(isDark), "xl:hidden p-0 overflow-hidden")}
-                aria-label="حساب کاربری"
-              >
-                <UserAvatar size="sm" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className={cn(
-                "w-56 z-[60]",
-                adminDropdown(isDark)
-              )}
-            >
-              <DropdownMenuLabel className="font-normal">
-                <p className="font-semibold truncate">{userName}</p>
-                <p
-                  className={cn(
-                    "text-xs font-normal mt-0.5",
-                    isDark ? "text-gray-400" : "text-gray-500"
-                  )}
-                >
-                  {roleLabel}
-                </p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator
-                className={isDark ? "bg-white/10" : undefined}
-              />
-              <DropdownMenuItem asChild className="xl:hidden cursor-pointer">
-                <Link href="/pos" className="flex items-center gap-2">
-                  <ShoppingCart size={15} />
-                  سیستم فروش (POS)
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild className="xl:hidden cursor-pointer">
-                <Link href="/kitchen" className="flex items-center gap-2">
-                  <ChefHat size={15} />
-                  نمایش آشپزخانه
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator
-                className={cn("xl:hidden", isDark ? "bg-white/10" : undefined)}
-              />
-              <DropdownMenuItem
-                onClick={onLogout}
-                className="text-red-500 focus:text-red-500 cursor-pointer"
-              >
-                <LogOut size={15} className="ml-2" />
-                خروج از حساب
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Logout — desktop only (mobile/tablet via dropdown) */}
           <button
             type="button"
             onClick={onLogout}
             className={cn(
-              "hidden xl:flex",
               iconBtn(isDark),
               isDark
                 ? "bg-red-500/15 hover:bg-red-500/25 text-red-400"
