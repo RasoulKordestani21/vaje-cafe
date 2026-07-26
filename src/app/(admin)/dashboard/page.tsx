@@ -9,7 +9,7 @@ import {
   Trash2,
   Plus,
   Edit2,
-  LayoutDashboard,
+  // LayoutDashboard,
   Coffee,
   Users,
   Clock,
