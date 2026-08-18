@@ -5,6 +5,7 @@ import { X, ChevronRight, ChevronLeft, Images, Play } from "lucide-react";
 import { toPersianDigits } from "@/utils/format";
 import { ThemeContext } from "@/app/providers";
 import { cn } from "@/lib/utils";
+import { getMenuItemImageUrl, setMenuImageFallback } from "@/constants";
 import GalleryVideoPlayer from "@/components/gallery/GalleryVideoPlayer";
 
 interface Photo {
@@ -202,10 +203,7 @@ export default function GalleryPage() {
                         alt={photo.caption ?? photo.galleryTitle}
                         loading="lazy"
                         className="w-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-95"
-                        onError={e => {
-                          (e.target as HTMLImageElement).src =
-                            `https://picsum.photos/400/300?random=${photo.id}`;
-                        }}
+                        onError={e => setMenuImageFallback(e.target as HTMLImageElement)}
                       />
                     </div>
                   )}

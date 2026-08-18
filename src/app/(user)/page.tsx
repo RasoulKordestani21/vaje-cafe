@@ -21,6 +21,7 @@ import { ThemeContext } from "@/app/providers";
 import { useSiteSettings } from "@/context/SiteSettingsContext";
 import { CATEGORIES, MenuItem } from "@/types";
 import { menuItemMatchesCategory } from "@/constants/menuCategories";
+import { getMenuItemImageUrl, setMenuImageFallback } from "@/constants";
 import { formatToman } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
@@ -536,8 +537,7 @@ function ProductCard({
   text: string;
   muted: string;
 }) {
-  const imgSrc =
-    item.imageUrl || `https://picsum.photos/300/200?random=${item.id}`;
+  const imgSrc = getMenuItemImageUrl(item.imageUrl);
 
   return (
     <Link
@@ -555,10 +555,7 @@ function ProductCard({
           src={imgSrc}
           alt={item.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          onError={e => {
-            (e.target as HTMLImageElement).src =
-              `https://picsum.photos/300/200?random=${item.id}`;
-          }}
+          onError={e => setMenuImageFallback(e.target as HTMLImageElement)}
         />
         {item.is_pinned && (
           <span className="absolute top-2 right-2 bg-[#186244] text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">

@@ -20,6 +20,7 @@ import { formatToman, toPersianDigits } from "@/utils/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getMenuItemImageUrl, setMenuImageFallback } from "@/constants";
 import { adminCard, adminTextPrimary, adminTextMuted } from "@/lib/adminTheme";
 
 interface MenuTableProps {
@@ -179,9 +180,10 @@ const MenuTable: React.FC<MenuTableProps> = ({
                     {/* Image */}
                     <td className="py-2 px-3">
                       <img
-                        src={item.imageUrl || `https://picsum.photos/80/60?random=${item.id}`}
+                        src={getMenuItemImageUrl(item.imageUrl)}
                         alt={item.name}
                         className="w-12 h-9 object-cover rounded-lg"
+                        onError={e => setMenuImageFallback(e.target as HTMLImageElement)}
                       />
                     </td>
                     {/* Name */}
@@ -305,12 +307,10 @@ const MenuTable: React.FC<MenuTableProps> = ({
                 {/* Image */}
                 <div className="relative aspect-[4/3] overflow-hidden">
                   <img
-                    src={
-                      item.imageUrl ||
-                      `https://picsum.photos/400/300?random=${item.id}`
-                    }
+                    src={getMenuItemImageUrl(item.imageUrl)}
                     alt={item.name}
                     className="w-full h-full object-cover"
+                    onError={e => setMenuImageFallback(e.target as HTMLImageElement)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   <div className="absolute bottom-2 right-2 left-2 flex items-end justify-between">

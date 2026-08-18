@@ -4,6 +4,19 @@ import { encodeMenuCategory } from "./constants/menuCategories";
 // Logo path - served from public/assets
 export const LOGO_URL = "/assets/logo.png";
 
+/** Local fallback for menu/gallery images (avoids external picsum.photos ORB errors) */
+export const MENU_PLACEHOLDER_URL = "/assets/placeholder-menu.svg";
+
+export function getMenuItemImageUrl(imageUrl?: string | null): string {
+  return imageUrl?.trim() || MENU_PLACEHOLDER_URL;
+}
+
+export function setMenuImageFallback(img: HTMLImageElement): void {
+  if (!img.src.includes("placeholder-menu.svg")) {
+    img.src = MENU_PLACEHOLDER_URL;
+  }
+}
+
 const HOT = "نوشیدنی‌های گرم (Hot Beverages)";
 const COLD = "نوشیدنی‌های سرد (Cold Beverages)";
 const DESSERTS = "دسر و شیرینی (Desserts)";
@@ -17,7 +30,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 85000,
     category: encodeMenuCategory(HOT, "قهوه‌های بر پایه شیر"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=1"
+    imageUrl: ""
   },
   {
     id: "2",
@@ -27,7 +40,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 95000,
     category: encodeMenuCategory(HOT, "قهوه‌های دمی"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=2"
+    imageUrl: ""
   },
   {
     id: "3",
@@ -36,7 +49,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 80000,
     category: encodeMenuCategory(COLD, "آیس کافی"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=3"
+    imageUrl: ""
   },
   {
     id: "4",
@@ -46,7 +59,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 110000,
     category: encodeMenuCategory(DESSERTS, "شیرینی‌های خشک"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=4"
+    imageUrl: ""
   },
   {
     id: "5",
@@ -55,7 +68,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 120000,
     category: encodeMenuCategory(HOT, "هات چاکلت و نوشیدنی‌های ویژه"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=5"
+    imageUrl: ""
   },
   {
     id: "6",
@@ -64,6 +77,6 @@ export const DEFAULT_MENU: MenuItem[] = [
     price: 90000,
     category: encodeMenuCategory(HOT, "قهوه‌های بر پایه شیر"),
     available: true,
-    imageUrl: "https://picsum.photos/400/400?random=6"
+    imageUrl: ""
   }
 ];

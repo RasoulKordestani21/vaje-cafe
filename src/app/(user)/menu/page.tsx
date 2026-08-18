@@ -8,6 +8,7 @@ import { useCart } from "@/context/CartContext";
 import { ThemeContext } from "@/app/providers";
 import { CATEGORIES, MenuItem } from "@/types";
 import { menuItemMatchesCategory } from "@/constants/menuCategories";
+import { getMenuItemImageUrl, setMenuImageFallback } from "@/constants";
 import { formatToman } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import {
@@ -456,7 +457,7 @@ export default function MenuPage() {
                               {/* thumbnail */}
                               <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0">
                                 <img
-                                  src={item?.imageUrl || `https://picsum.photos/60/60?random=${ci.itemId}`}
+                                  src={getMenuItemImageUrl(item?.imageUrl)}
                                   alt={item?.name}
                                   className="w-full h-full object-cover"
                                 />
@@ -607,7 +608,7 @@ function MenuCard({
   highlight: (s: string) => React.ReactNode;
   qty: number; onAdd: () => void;
 }) {
-  const imgSrc = item.imageUrl || `https://picsum.photos/300/300?random=${item.id}`;
+  const imgSrc = getMenuItemImageUrl(item.imageUrl);
   const outOfInventory = item.inStockFromInventory === false;
 
   return (
@@ -626,7 +627,7 @@ function MenuCard({
             "w-full h-full object-cover transition-transform duration-500 group-hover:scale-105",
             outOfInventory && "grayscale"
           )}
-          onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/300/300?random=${item.id}`; }}
+          onError={e => setMenuImageFallback(e.target as HTMLImageElement)}
         />
         {outOfInventory && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">
